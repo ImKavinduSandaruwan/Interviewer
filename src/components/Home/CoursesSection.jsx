@@ -248,16 +248,31 @@ const CoursesSection = () => {
   const location = useLocation();
   const [selectedVideo, setSelectedVideo] = useState(null);
   const [persistedResources, setPersistedResources] = useState({});
+  const [historyCourses, setHistoryCourses] = useState([]);
 
   useEffect(() => {
-    const savedResources = localStorage.getItem('resourcesToImprove');
-    const initialResources = savedResources 
+    // Load persisted resources
+    const savedResources = localStorage.getItem("resourcesToImprove");
+    const initialResources = savedResources
       ? JSON.parse(savedResources)
       : location.state?.resourcesToImprove || {};
     setPersistedResources(initialResources);
 
     if (location.state?.resourcesToImprove) {
-      localStorage.setItem('resourcesToImprove', JSON.stringify(location.state.resourcesToImprove));
+      localStorage.setItem(
+        "resourcesToImprove",
+        JSON.stringify(location.state.resourcesToImprove)
+      );
+    }
+
+    // Load video history from localStorage based on userId
+    const userId = sessionStorage.getItem("userId");
+    if (userId) {
+      const historyKey = `history_${userId}`;
+      const savedHistory = localStorage.getItem(historyKey);
+      if (savedHistory) {
+        setHistoryCourses(JSON.parse(savedHistory));
+      }
     }
   }, [location.state]);
 
@@ -330,6 +345,21 @@ const CoursesSection = () => {
     });
   };
 
+  const onVideoClick = (course) => {
+    const userId = sessionStorage.getItem("userId");
+    if (userId) {
+      const historyKey = `history_${userId}`;
+      let history = JSON.parse(localStorage.getItem(historyKey)) || [];
+      // Avoid duplicates by checking the video link
+      if (!history.some((item) => item.link === course.link)) {
+        const updatedHistory = [course, ...history]; // Add new video to the start
+        localStorage.setItem(historyKey, JSON.stringify(updatedHistory));
+        setHistoryCourses(updatedHistory);
+      }
+    }
+    setSelectedVideo(course);
+  };
+
   return (
     <div className="bg-white min-h-screen">
       {Object.keys(persistedResources).length > 0 ? (
@@ -350,9 +380,7 @@ const CoursesSection = () => {
                 "videos",
                 persistedResources[title].videos || []
               )}
-              onVideoClick={(course) => {
-                setSelectedVideo(course);
-              }}
+              onVideoClick={onVideoClick}
             />
           </React.Fragment>
         ))
@@ -362,10 +390,16 @@ const CoursesSection = () => {
             No Resources Available
           </h2>
           <p className="text-[#564D4D] text-[16px] font-medium font-poppins">
-            Please Upload the CV to receive personalized
-            learning resources.
+            Please Upload the CV to receive personalized learning resources.
           </p>
         </div>
+      )}
+      {historyCourses.length > 0 && (
+        <Section
+          title="Your History"
+          courses={historyCourses}
+          onVideoClick={onVideoClick}
+        />
       )}
       {selectedVideo && (
         <VideoModal
