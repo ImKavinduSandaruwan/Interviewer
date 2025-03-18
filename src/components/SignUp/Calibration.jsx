@@ -286,7 +286,7 @@ const Calibration = () => {
               <div className="space-y-6 p-[50px] bg-[#F1F4F8] rounded-[40px]">
                 <div>
                   <label className="block mb-2 text-[#564D4D] text-[16px] leading-[24px] font-medium font-poppins">
-                    What is your desired job role?
+                    What is your desired seniority level?
                   </label>
                   <select
                     name="targetRole"
