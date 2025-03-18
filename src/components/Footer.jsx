@@ -1,7 +1,7 @@
 /* eslint-disable no-unused-vars */
 import React from "react";
 import { Instagram, Facebook, Linkedin, Youtube } from "lucide-react";
-import footer_logo from "../assets/Footer_logo.svg";
+import footer_logo from "../assets/logoo.png";
 
 function Footer() {
   return (
@@ -10,13 +10,11 @@ function Footer() {
         {/* Logo and Navigation */}
         <div className="flex flex-col items-center mb-8">
           {/* Logo */}
-          <div className="flex items-center gap-3 mb-8">
-            <div className="w-[75px] h-[72px]  rounded-full">
+          <div className="flex items-center gap-3 mb-1">
+            <div className="w-[205px] h-[202px]  rounded-full">
               <img src={footer_logo} alt="Target Logo" />
             </div>
-            <span className="text-[32px] leading-[32px] font-hepta trcking-[-3px] font-bold text-[#CC0B0B]">
-              Target
-            </span>
+            
           </div>
 
           {/* Navigation */}

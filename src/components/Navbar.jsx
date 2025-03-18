@@ -1,7 +1,7 @@
 /* eslint-disable no-unused-vars */
 import React, { useState } from "react";
 import { Search, Menu, X } from "lucide-react";
-import logo from "../assets/Logo.svg";
+import logo from "../assets/logoo.png";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 
@@ -69,10 +69,7 @@ const Navbar = () => {
               className="flex items-center cursor-pointer"
               onClick={() => navigate("/")}
             >
-              <img src={logo} alt="Logo" className="h-[50px] w-[52px]" />
-              <span className="text-[#B12030] text-[24px] font-bold tracking-[-3px] font-hepta">
-                Target
-              </span>
+              <img src={logo} alt="Logo" className="h-[180px] w-[184px]" />
             </div>
 
             <div className="hidden md:flex space-x-8">
@@ -97,12 +94,12 @@ const Navbar = () => {
               Upload CV
             </button>
 
-            <button
+            {/* <button
               onClick={handleLogout}
               className="px-5 py-2 text-white bg-[#B12030] rounded-full hover:bg-red-700"
             >
               Log Out
-            </button>
+            </button> */}
           </div>
 
           {/* Mobile Menu Button */}

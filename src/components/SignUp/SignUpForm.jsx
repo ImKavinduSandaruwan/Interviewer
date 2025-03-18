@@ -1,9 +1,8 @@
-
 import { useState } from "react";
 import { User, Mail, Lock } from "lucide-react";
 import signup_bg from "../../assets/SignUp_bg.svg";
 import { useNavigate } from "react-router-dom";
-import axios from "axios"; 
+import axios from "axios";
 
 const SignUpForm = () => {
   const [formData, setFormData] = useState({
@@ -12,8 +11,8 @@ const SignUpForm = () => {
     password: "",
     agreeToTerms: false,
   });
-  const [loading, setLoading] = useState(false); 
-  const [error, setError] = useState(null); 
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
@@ -34,25 +33,34 @@ const SignUpForm = () => {
       password: formData.password,
     };
 
-    setLoading(true); 
-    setError(null); 
+    setLoading(true);
+    setError(null);
 
     try {
-      const response = await axios.post(
-        "/api/v1/auth/signup", 
-        payload,
-        { headers: { "Content-Type": "application/json" } }
-      );
+      const response = await axios.post("/api/v1/auth/signup", payload, {
+        headers: { "Content-Type": "application/json" },
+      });
 
-      console.log("Signup successful:", response.data);
-      navigate("/"); 
+      console.log("Register successful:", response.data);
+      console.log("Token:", response.data.token);
+      console.log("user id:", response.data.userId);
+
+      sessionStorage.setItem("userId", response.data.userId);
+      sessionStorage.setItem("token", response.data.token);
+
+      const userId = response.data.userId;
+      const calibrationCompleted = localStorage.getItem(
+        `calibrationCompleted_${userId}`
+      );
+      console.log("calibrationCompleted", calibrationCompleted);
+      navigate(calibrationCompleted ? "/home" : "/details");
     } catch (err) {
       console.error("Signup error:", err);
       setError(
         err.response?.data?.message || "Something went wrong. Please try again."
       );
     } finally {
-      setLoading(false); 
+      setLoading(false);
     }
   };
 
@@ -121,7 +129,7 @@ const SignUpForm = () => {
                 onChange={(e) =>
                   setFormData({ ...formData, email: e.target.value })
                 }
-                disabled={loading} 
+                disabled={loading}
               />
               <div className="absolute right-2 top-2 text-gray-400">
                 <svg
@@ -150,7 +158,7 @@ const SignUpForm = () => {
                 onChange={(e) =>
                   setFormData({ ...formData, password: e.target.value })
                 }
-                disabled={loading} 
+                disabled={loading}
               />
               <div className="absolute right-2 top-2 text-gray-400">
                 <svg
@@ -179,7 +187,7 @@ const SignUpForm = () => {
                 onChange={(e) =>
                   setFormData({ ...formData, agreeToTerms: e.target.checked })
                 }
-                disabled={loading} 
+                disabled={loading}
               />
               <label
                 htmlFor="terms"
@@ -199,7 +207,7 @@ const SignUpForm = () => {
                 className={`bg-[#B12030] text-white text-[20px] leading-[30px] font-poppins rounded-full px-16 py-3 font-medium transition-colors ${
                   loading ? "opacity-50 cursor-not-allowed" : "hover:bg-red-600"
                 }`}
-                disabled={loading} 
+                disabled={loading}
               >
                 {loading ? "Signing up..." : "Sign up"}
               </button>

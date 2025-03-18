@@ -101,6 +101,8 @@ const Calibration = () => {
       EnglishLevel: formData.EnglishLevel,
     };
 
+    console.log("Payload:", payload);
+
     try {
       const response = await axios.post(
         `/api/v1/user-basic/${userId}`,
@@ -114,6 +116,27 @@ const Calibration = () => {
       );
       console.log("API Response:", response.data);
       setStep(2); // Move to Skill Assessment
+      // Add these lines to store jobRole and experience in session storage
+      if(formData.jobRole == "Software Engineer"){
+        sessionStorage.setItem("jobRole", "SE");
+      }else if(formData.jobRole == "Product Manager"){
+        sessionStorage.setItem("jobRole", "PM");
+      }else if(formData.jobRole == "QA"){
+        sessionStorage.setItem("jobRole", "QA");
+      }
+
+      if(formData.experience == "Junior"){
+        sessionStorage.setItem("experience", "Intern");
+      }else if(formData.experience == "Mid"){
+        sessionStorage.setItem("experience", "Associate");
+      }else if(formData.experience == "Senior"){
+        sessionStorage.setItem("experience", "Senior");
+      }
+
+      console.log("jobRole:", sessionStorage.getItem("jobRole"));
+      console.log("experience:", sessionStorage.getItem("experience"));
+
+
     } catch (error) {
       console.error(
         "Error saving basic details:",
@@ -239,10 +262,9 @@ const Calibration = () => {
                     onChange={handleInputChange}
                     className="w-full px-[18px] py-[17px] rounded-[100px] font-medium font-poppins text-[14px] leading-[21px] border"
                   >
-                    <option value="Software Engineer">Software Engineer</option>
-                    <option value="Product Manager">Product Manager</option>
-                    <option value="Data Analyst">Data Analyst</option>
-                    <option value="Designer">Designer</option>
+                    <option value="SE">Software Engineer</option>
+                    <option value="PM">Product Manager</option>
+                    <option value="QA">QA</option>
                   </select>
                 </div>
                 <div>
@@ -255,8 +277,8 @@ const Calibration = () => {
                     onChange={handleInputChange}
                     className="w-full px-[18px] py-[17px] rounded-[100px] font-medium font-poppins text-[14px] leading-[21px] border"
                   >
-                    <option value="Junior">Junior (0-2 years)</option>
-                    <option value="Mid">Mid (3-5 years)</option>
+                    <option value="Intern">Junior (0-2 years)</option>
+                    <option value="Associate">Mid (3-5 years)</option>
                     <option value="Senior">Senior (6+ years)</option>
                   </select>
                 </div>
@@ -289,8 +311,6 @@ const Calibration = () => {
                   >
                     <option value="Java">Java</option>
                     <option value="Python">Python</option>
-                    <option value="JavaScript">JavaScript</option>
-                    <option value="Design">Design</option>
                   </select>
                 </div>
                 <div>

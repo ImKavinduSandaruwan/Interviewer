@@ -48,7 +48,7 @@ const Login = () => {
         `calibrationCompleted_${userId}`
       );
       console.log("calibrationCompleted", calibrationCompleted);
-      navigate(calibrationCompleted ? "/home" : "/details"); 
+      navigate("/home"); 
 
       // navigate("/details");
     } catch (err) {

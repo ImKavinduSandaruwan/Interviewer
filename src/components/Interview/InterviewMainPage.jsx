@@ -340,21 +340,21 @@ export const InterviewMainPage = () => {
   // Interviewers data for the UI
   const interviewers = [
     {
-      name: "Priya Khalifa",
+      name: "Priya",
       role: "Human Resources",
       isSpeaking: getCurrentSpeaker() === "Priya",
       animation: womanAnimation, // Should be a woman animation
       refKey: "Priya",
     },
     {
-      name: "David Rodriguez",
+      name: "David",
       role: "Senior Developer",
       isSpeaking: getCurrentSpeaker() === "David",
       animation: man2Animation,
       refKey: "David",
     },
     {
-      name: "Daniel Smith",
+      name: "Smith",
       role: "Tech Lead",
       isSpeaking: getCurrentSpeaker() === "Daniel",
       animation: man3Animation,
@@ -432,10 +432,10 @@ export const InterviewMainPage = () => {
               </button>
               <div className="hidden sm:block">
                 <h2 className="text-sm sm:text-lg font-medium text-blue-400">
-                  Senior Software Engineering Interview
+                  Software Engineering Interview
                 </h2>
                 <p className="text-xs text-gray-400 mt-1">
-                  Interview ID: SE-2025-03-13 | Candidate: Kavindu
+                  Interview ID: SE-2025-001-009 
                 </p>
               </div>
               <div className="sm:hidden">
