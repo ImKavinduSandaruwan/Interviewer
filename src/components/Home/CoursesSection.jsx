@@ -1,7 +1,7 @@
 import React, { useRef, useState, useEffect } from "react";
 import { ArrowRight, ArrowLeft } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 const FALLBACK_IMAGE =
   "https://m.media-amazon.com/images/I/61cqQC9+H9L._SY425_.jpg";
@@ -86,10 +86,11 @@ const CourseCard = ({ image, title, description, link, onClick, type }) => {
   }
 };
 
-const Section = ({ title, courses, showMore = true, onVideoClick }) => {
+const Section = ({ title, courses, showMore = true, onVideoClick, type }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [direction, setDirection] = useState(0);
   const containerRef = useRef(null);
+  const navigate = useNavigate();
 
   const itemsPerPage = {
     sm: 1,
@@ -136,6 +137,12 @@ const Section = ({ title, courses, showMore = true, onVideoClick }) => {
     }),
   };
 
+  const handleSeeMore = () => {
+    if (type === "videos") {
+      navigate("/videos", { state: { title, courses } });
+    }
+  };
+
   return (
     <div className="lg:py-8 mt-4">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -144,12 +151,12 @@ const Section = ({ title, courses, showMore = true, onVideoClick }) => {
             {title}
           </h2>
           {showMore && (
-            <a
-              href="#"
+            <button
+              onClick={handleSeeMore}
               className="text-[#B12030] hover:text-red-700 text-[20px] leading-[24px] font-medium font-poppins"
             >
               See More
-            </a>
+            </button>
           )}
         </div>
 
@@ -372,6 +379,7 @@ const CoursesSection = () => {
                 "ebooks",
                 persistedResources[title].ebooks || []
               )}
+              type="ebooks"
             />
             <Section
               title={`${title} Videos`}
@@ -381,6 +389,7 @@ const CoursesSection = () => {
                 persistedResources[title].videos || []
               )}
               onVideoClick={onVideoClick}
+              type="videos"
             />
           </React.Fragment>
         ))
@@ -399,6 +408,7 @@ const CoursesSection = () => {
           title="Your History"
           courses={historyCourses}
           onVideoClick={onVideoClick}
+          type="videos"
         />
       )}
       {selectedVideo && (

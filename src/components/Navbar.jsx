@@ -82,6 +82,9 @@ const Navbar = () => {
               <a href="/mcq" className="text-black hover:font-bold">
                 MCQ
               </a>
+              <a href="/videos" className="text-black hover:font-bold">
+                Video
+              </a>
             </div>
           </div>
 

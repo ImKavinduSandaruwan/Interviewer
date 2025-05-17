@@ -1,11 +1,16 @@
 import React, { useEffect, useState, useRef } from "react";
 import axios from "axios";
 import Lottie from "lottie-react";
-import womanAnimation from "../../assets/women.json"; // Assuming this is a woman animation
+import womanAnimation from "../../assets/women.json";
 import man2Animation from "../../assets/man2.json";
 import man3Animation from "../../assets/man3.json";
+import { useNavigate } from "react-router-dom";
 
+// Main interview page component
 export const InterviewMainPage = () => {
+  const navigate = useNavigate();
+
+  // State variables
   const [questions, setQuestions] = useState([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(-1);
   const [interviewStage, setInterviewStage] = useState("preparing");
@@ -15,28 +20,31 @@ export const InterviewMainPage = () => {
   const [voices, setVoices] = useState([]);
   const [feedback, setFeedback] = useState([]);
   const [showFeedback, setShowFeedback] = useState(false);
+  const [collectedAnswers, setCollectedAnswers] = useState([]);
+  const [interviewId, setInterviewId] = useState(null);
+  const [isListening, setIsListening] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [showProgress, setShowProgress] = useState(false);
 
+  // Refs
   const videoRef = useRef(null);
   const intervalRef = useRef(null);
   const interviewStartedRef = useRef(false);
-
   const lottieRefs = {
     Priya: useRef(null),
     David: useRef(null),
     Daniel: useRef(null),
   };
 
-  // 1) Load available voices with retry mechanism
+  // Load available voices with retry mechanism
   useEffect(() => {
     const loadVoices = () => {
-      let availableVoices = window.speechSynthesis.getVoices();
+      const availableVoices = window.speechSynthesis.getVoices();
       if (availableVoices.length === 0) {
-        // Voices might not be loaded yet, retry after a short delay
         setTimeout(loadVoices, 100);
         return;
       }
       setVoices(availableVoices);
-      // Log available voices for debugging
       console.log(
         "Available voices:",
         availableVoices.map((v) => ({ name: v.name, lang: v.lang }))
@@ -51,7 +59,7 @@ export const InterviewMainPage = () => {
     };
   }, []);
 
-  // 2) Initialize camera and timer
+  // Initialize camera and timer
   useEffect(() => {
     const setupCamera = async () => {
       try {
@@ -59,7 +67,6 @@ export const InterviewMainPage = () => {
           video: true,
           audio: true,
         });
-
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
         }
@@ -82,7 +89,7 @@ export const InterviewMainPage = () => {
     };
   }, []);
 
-  // 3) Start the interview flow, but only once
+  // Start the interview flow, ensuring it runs only once
   useEffect(() => {
     const startInterview = async () => {
       try {
@@ -109,24 +116,22 @@ export const InterviewMainPage = () => {
         );
 
         console.log("Interview session started:", response.data.interview_id);
-        const interviewId = response.data.interview_id;
+        setInterviewId(response.data.interview_id);
 
         if (response.data?.questions) {
           setQuestions(response.data.questions);
 
-          // Greeting with Priya's voice (female)
+          // Greeting
           setInterviewStage("greeting");
           setCurrentQuestionIndex(-1);
           const greetingSpeaker = getCurrentSpeaker();
           console.log("Greeting speaker:", greetingSpeaker);
           await speakText(
-            "Hi Kavindu, welcome, and thank you for joining us today! We appreciate your time. Let me introduce the interview panel. I am Priya and with me join today this is David and Daniel, who will be part of today's discussion. Let's begin the interview.",
+            "Hi Kavindu, welcome, and thank you for joining us today! We appreciate your time. Let me introduce the interview panel. I am Priya and I will be part of today's discussion. Let's begin the interview.",
             greetingSpeaker
           );
 
-          const collectedAnswers = [];
-
-          // Loop through each question
+          // Questions loop
           setInterviewStage("questions");
           for (let i = 0; i < response.data.questions.length; i++) {
             setCurrentQuestionIndex(i);
@@ -136,52 +141,28 @@ export const InterviewMainPage = () => {
             await speakText(questionObj.question, speaker);
 
             const candidateResponse = await listenForCandidateResponse();
-            console.log(
-              `Candidate Response for Question ${i + 1}:`,
-              candidateResponse
-            );
-            collectedAnswers.push({
-              question_id: questionObj.id,
-              answer_text: candidateResponse,
-            });
+            console.log(`Candidate Response for Question ${i + 1}:`, candidateResponse);
+            setCollectedAnswers((prev) => [
+              ...prev,
+              {
+                question_id: questionObj.id,
+                answer_text: candidateResponse,
+              },
+            ]);
           }
 
-          // Closing with Priya's voice (female)
+          // Closing
           setInterviewStage("closing");
           setCurrentQuestionIndex(response.data.questions.length);
           const closingSpeaker = getCurrentSpeaker();
           console.log("Closing speaker:", closingSpeaker);
           await speakText(
-            "That concludes our interview. Thank you for your time.",
+            "That concludes our interview. Thank you for your time. If you have any questions, feel free to ask.",
             closingSpeaker
           );
 
-          // 4) Submit all answers after the final question
-          try {
-            const response = await axios.post(
-              "/api/v1/interview/result",
-              {
-                interview_id: interviewId,
-                answers: collectedAnswers,
-              },
-              {
-                headers: {
-                  Authorization: `Bearer ${token}`,
-                  "Content-Type": "application/json",
-                },
-              }
-            );
-            console.log("Interview results posted successfully!", response.data);
-            if (response.data && response.data.results) {
-              const allFeedback = response.data.results.flatMap(
-                (result) => result.feedback || []
-              );
-              setFeedback(allFeedback);
-              setShowFeedback(true);
-            }
-          } catch (err) {
-            console.error("Failed to post interview results:", err);
-          }
+          // User choice stage
+          setInterviewStage("user-choice");
         }
       } catch (error) {
         console.error("Failed to start interview session:", error);
@@ -193,7 +174,7 @@ export const InterviewMainPage = () => {
     startInterview();
   }, [voices]);
 
-  // Function to capture candidate response via speech recognition for 10 seconds
+  // Capture candidate response or question via speech recognition
   const listenForCandidateResponse = () => {
     return new Promise((resolve) => {
       const SpeechRecognition =
@@ -237,7 +218,6 @@ export const InterviewMainPage = () => {
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
 
-      // Improved voice selection with exact name matching based on available voices
       const getFemaleVoice = () => {
         const femaleVoices = ["Google UK English Female"];
         const femaleVoice = voices.find((v) => femaleVoices.includes(v.name));
@@ -252,7 +232,6 @@ export const InterviewMainPage = () => {
         return maleVoice || voices.find((v) => /male/i.test(v.name)) || voices[1] || voices[0];
       };
 
-      // Choose voice based on speaker explicitly
       switch (speaker) {
         case "Priya":
           utterance.voice = getFemaleVoice();
@@ -266,11 +245,9 @@ export const InterviewMainPage = () => {
           console.log(`Default voice selected for ${speaker}`);
       }
 
-      // Adjust pitch and rate to differentiate speakers, even if voices are the same
-      utterance.pitch = speaker === "Priya" ? 1.2 : 0.8; // Higher pitch for female, lower for male
-      utterance.rate = speaker === "Daniel" ? 1.1 : 1.0; // Slightly faster for Daniel
+      utterance.pitch = speaker === "Priya" ? 1.2 : 0.8;
+      utterance.rate = speaker === "Daniel" ? 1.1 : 1.0;
 
-      // Add logging for when speech starts and ends
       utterance.onstart = () => {
         console.log(`Starting to speak with ${speaker}'s voice:`, utterance.voice?.name);
       };
@@ -283,13 +260,12 @@ export const InterviewMainPage = () => {
     });
   };
 
-  // Control Lottie animations
+  // Control Lottie animations based on current speaker
   useEffect(() => {
     const currentSpeaker = getCurrentSpeaker();
-
     Object.keys(lottieRefs).forEach((name) => {
       if (lottieRefs[name].current) {
-        if (name === currentSpeaker && interviewStage !== "preparing") {
+        if (name === currentSpeaker && interviewStage !== "preparing" && interviewStage !== "user-choice") {
           lottieRefs[name].current.play();
         } else {
           lottieRefs[name].current.stop();
@@ -298,7 +274,7 @@ export const InterviewMainPage = () => {
     });
   }, [currentQuestionIndex, interviewStage]);
 
-  // Get current display text for the UI
+  // Get current display text for UI
   const getCurrentText = () => {
     if (interviewStage === "preparing") {
       return "Preparing your interview...";
@@ -311,7 +287,7 @@ export const InterviewMainPage = () => {
     ) {
       return questions[currentQuestionIndex].question;
     } else if (interviewStage === "closing") {
-      return "That concludes our interview. Thank you for your time.";
+      return "That concludes our interview. Thank you for your time. If you have any questions, feel free to ask.";
     }
     return "";
   };
@@ -326,50 +302,105 @@ export const InterviewMainPage = () => {
       .padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
 
-  // Determine current speaker based on interview stage and question index
+  // Determine current speaker
   const getCurrentSpeaker = () => {
     const speakers = ["Priya", "David", "Daniel"];
     if (interviewStage === "greeting" || interviewStage === "closing") {
-      return "Priya"; // Female voice for welcome and conclusion
+      return "Priya";
     } else if (interviewStage === "questions" && currentQuestionIndex >= 0) {
-      return speakers[currentQuestionIndex % speakers.length]; // Priya for first, David for second, etc.
+      return speakers[currentQuestionIndex % speakers.length];
     }
-    return "Priya"; // Default to Priya
+    return "Priya";
   };
 
-  // Interviewers data for the UI
+  // Handle asking a question
+  const handleAskQuestion = async () => {
+    setIsListening(true);
+    const question = await listenForCandidateResponse();
+    console.log("Question asked:", question);
+    setIsListening(false);
+    if (question) {
+      try {
+        setIsLoading(true);
+        const token = sessionStorage.getItem("token");
+        console.log("Token for ask:", token);
+        const response = await axios.post(
+          "/api/v1/interview/ask",
+          { question },
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+        console.log("Response to question:", response.data);
+        const currentSpeaker = getCurrentSpeaker();
+        speakText(response.data.tts_friendly_answer, currentSpeaker);
+        setIsLoading(false);
+        setShowProgress(true);
+        setTimeout(() => {
+          setShowProgress(false);
+        }, 3000);
+      } catch (error) {
+        console.error("Failed to ask question:", error);
+        setIsLoading(false);
+        setShowProgress(true);
+        setTimeout(() => {
+          setShowProgress(false);
+        }, 3000);
+      }
+    }
+  };
+
+  // Handle ending the interview
+  const handleEndInterview = async () => {
+    try {
+      const token = sessionStorage.getItem("token");
+      const response = await axios.post(
+        "/api/v1/interview/result",
+        {
+          interview_id: interviewId,
+          answers: collectedAnswers,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      console.log("Interview results posted successfully!", response.data);
+      if (response.data && response.data.results) {
+        const allFeedback = response.data.results.flatMap(
+          (result) => result.feedback || []
+        );
+        setFeedback(allFeedback);
+        setShowFeedback(true);
+      }
+    } catch (err) {
+      console.error("Failed to post interview results:", err);
+    }
+  };
+
+  // Interviewers data for UI
   const interviewers = [
     {
       name: "Priya",
       role: "Human Resources",
       isSpeaking: getCurrentSpeaker() === "Priya",
-      animation: womanAnimation, // Should be a woman animation
+      animation: womanAnimation,
       refKey: "Priya",
-    },
-    {
-      name: "David",
-      role: "Senior Developer",
-      isSpeaking: getCurrentSpeaker() === "David",
-      animation: man2Animation,
-      refKey: "David",
-    },
-    {
-      name: "Smith",
-      role: "Tech Lead",
-      isSpeaking: getCurrentSpeaker() === "Daniel",
-      animation: man3Animation,
-      refKey: "Daniel",
     },
   ];
 
-  // Audio visualization bars (for the speaking indicator)
+  // Render audio visualization bars
   const renderAudioBars = () => {
     const bars = [];
     for (let i = 0; i < 8; i++) {
       const height = Math.floor(Math.random() * 12) + 4;
       const animationDuration = (Math.random() * 0.8 + 0.2).toFixed(2);
       const animationDelay = (Math.random() * 0.5).toFixed(2);
-
       bars.push(
         <div
           key={i}
@@ -386,20 +417,25 @@ export const InterviewMainPage = () => {
 
   return (
     <div className="h-screen bg-gradient-to-br from-gray-900 to-black text-white flex flex-col overflow-hidden p-7">
+      {/* Inline styles for animations */}
       <div
         dangerouslySetInnerHTML={{
           __html: `
-          <style>
-            @keyframes audiowave {
-              0% { height: 4px; }
-              100% { height: 20px; }
-            }
-          </style>
-        `,
+            <style>
+              @keyframes audiowave {
+                0% { height: 4px; }
+                100% { height: 20px; }
+              }
+              @keyframes spin {
+                to { transform: rotate(360deg); }
+              }
+            </style>
+          `,
         }}
       />
 
       <div className="flex flex-col h-full max-h-full">
+        {/* Header */}
         <div className="flex justify-between items-center p-2 sm:p-4">
           <div>
             <h1 className="text-xl sm:text-2xl font-bold text-white">
@@ -419,7 +455,9 @@ export const InterviewMainPage = () => {
           </div>
         </div>
 
+        {/* Main content */}
         <div className="flex-1 flex flex-col bg-gray-800 rounded-lg overflow-hidden shadow-2xl border border-gray-700 mx-2 sm:mx-4 mb-2 sm:mb-4">
+          {/* Top bar */}
           <div className="flex items-center justify-between bg-gray-900 px-3 py-2 border-b border-gray-700">
             <div className="flex items-center">
               <button className="w-8 h-8 rounded-full bg-red-600 flex items-center justify-center mr-3">
@@ -435,7 +473,7 @@ export const InterviewMainPage = () => {
                   Software Engineering Interview
                 </h2>
                 <p className="text-xs text-gray-400 mt-1">
-                  Interview ID: SE-2025-001-009 
+                  Interview ID: SE-2025-001-009
                 </p>
               </div>
               <div className="sm:hidden">
@@ -470,7 +508,9 @@ export const InterviewMainPage = () => {
             </div>
           </div>
 
+          {/* Main video and interviewers section */}
           <div className="flex-1 flex flex-col lg:flex-row p-2 gap-2 overflow-hidden">
+            {/* Video section */}
             <div className="flex-grow flex flex-col h-full overflow-hidden">
               <div className="relative bg-gray-900 rounded-lg overflow-hidden flex items-center justify-center border border-gray-700 shadow-lg flex-1">
                 {isVideoOff ? (
@@ -501,28 +541,63 @@ export const InterviewMainPage = () => {
                 </div>
 
                 <div className="absolute bottom-4 left-2 right-2">
-                  <div
-                    className={`bg-gray-800 border ${
-                      interviewStage === "questions"
-                        ? "border-blue-500"
-                        : "border-gray-700"
-                    } rounded-lg p-2 shadow-lg`}
-                  >
-                    <div className="flex items-center mb-1">
-                      <div className="w-6 h-6 rounded-full bg-blue-600 flex items-center justify-center mr-2">
-                        <span className="text-xs font-bold">
-                          {getCurrentSpeaker().charAt(0)}
+                  {interviewStage === "user-choice" ? (
+                    <div className="bg-gray-800 border border-gray-700 rounded-lg p-2 shadow-lg">
+                      {isListening ? (
+                        <p className="text-sm">Listening for your question...</p>
+                      ) : isLoading ? (
+                        <div className="flex justify-center items-center">
+                          <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-500 rounded-full animate-spin"></div>
+                        </div>
+                      ) : showProgress ? (
+                        <div className="flex justify-center items-center">
+                          <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-500 rounded-full animate-spin"></div>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center">
+                          <p className="text-sm mb-4">Do you have any questions?</p>
+                          <div className="flex space-x-4">
+                            <button
+                              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                              onClick={handleAskQuestion}
+                            >
+                              Ask
+                            </button>
+                            <button
+                              className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+                              onClick={handleEndInterview}
+                            >
+                              End
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div
+                      className={`bg-gray-800 border ${
+                        interviewStage === "questions"
+                          ? "border-blue-500"
+                          : "border-gray-700"
+                      } rounded-lg p-2 shadow-lg`}
+                    >
+                      <div className="flex items-center mb-1">
+                        <div className="w-6 h-6 rounded-full bg-blue-600 flex items-center justify-center mr-2">
+                          <span className="text-xs font-bold">
+                            {getCurrentSpeaker().charAt(0)}
+                          </span>
+                        </div>
+                        <span className="font-medium text-blue-400 text-xs">
+                          {getCurrentSpeaker()} is asking:
                         </span>
                       </div>
-                      <span className="font-medium text-blue-400 text-xs">
-                        {getCurrentSpeaker()} is asking:
-                      </span>
+                      <p className="text-sm">{getCurrentText()}</p>
                     </div>
-                    <p className="text-sm">{getCurrentText()}</p>
-                  </div>
+                  )}
                 </div>
               </div>
 
+              {/* Control buttons */}
               <div className="flex justify-center space-x-2 sm:space-x-4 py-2 mt-2">
                 <button
                   className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full ${
@@ -589,7 +664,7 @@ export const InterviewMainPage = () => {
                       );
                     } else if (interviewStage === "closing") {
                       speakText(
-                        "That concludes our interview. Thank you for your time.",
+                        "That concludes our interview. Thank you for your time. If you have any questions, feel free to ask.",
                         currentSpeaker
                       );
                     }
@@ -619,6 +694,7 @@ export const InterviewMainPage = () => {
               </div>
             </div>
 
+            {/* Interviewers section */}
             <div className="lg:w-64 flex flex-row lg:flex-col overflow-x-auto lg:overflow-y-auto lg:overflow-x-hidden gap-2">
               <div className="flex lg:flex-col gap-2 min-w-max lg:min-w-0">
                 {interviewers.map((interviewer, index) => (
@@ -685,23 +761,43 @@ export const InterviewMainPage = () => {
           </div>
         </div>
       </div>
+
+      {/* Feedback popup */}
       {showFeedback && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
-          <div className="bg-white text-black p-6 rounded-lg shadow-lg max-w-md mx-auto">
-            <h2 className="text-xl font-bold mb-4">Interview Feedback</h2>
-            <ul className="list-disc pl-5">
-              {feedback.map((msg, index) => (
-                <li key={index} className="mb-2">
-                  {msg}
-                </li>
-              ))}
-            </ul>
-            <button
-              onClick={() => setShowFeedback(false)}
-              className="mt-4 bg-blue-600 text-white px-4 py-2 rounded"
-            >
-              Close
-            </button>
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
+          <div className="bg-white text-black rounded-lg shadow-lg max-w-lg w-full mx-4 overflow-hidden">
+            <div className="p-4 border-b border-gray-200 flex justify-between items-center">
+              <h2 className="text-xl font-semibold">Interview Feedback</h2>
+              <button
+                onClick={() => {
+                  setShowFeedback(false);
+                  navigate("/home");
+                }}
+                className="text-gray-600 hover:text-gray-800"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="p-4 max-h-96 overflow-y-auto">
+              <ul className="list-disc pl-5 space-y-2">
+                {feedback.map((msg, idx) => (
+                  <li key={idx} className="text-sm text-gray-800">
+                    {msg}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="p-4 border-t border-gray-200 text-right">
+              <button
+                onClick={() => {
+                  setShowFeedback(false);
+                  navigate("/home");
+                }}
+                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

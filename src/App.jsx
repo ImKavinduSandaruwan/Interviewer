@@ -15,6 +15,7 @@ import Mcq from "./pages/Mcq";
 import Calibration from "./components/SignUp/Calibration";
 import InterviewPage from "./pages/InterviewPage";
 import { InterviewMainPage } from "./components/Interview/InterviewMainPage";
+import Videos from "./components/Home/Videos";
 
 const Wrapper = ({ children }) => {
   const location = useLocation();
@@ -41,6 +42,7 @@ function App() {
             <Route path="/mcq" element={<Mcq />} />
             <Route path="/interview" element={<InterviewPage />} />
             <Route path="/interviewmain" element={<InterviewMainPage />} />
+            <Route path="/videos" element={<Videos />} />
           </Routes>
           <Footer />
         </Wrapper>

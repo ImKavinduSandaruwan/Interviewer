@@ -1,25 +1,35 @@
 import React, { useState, useEffect, useRef } from "react";
-import { ChevronDown, Check } from "lucide-react";
+import { ChevronDown, Check, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { motion, AnimatePresence } from "framer-motion";
 import confetti from "canvas-confetti";
 
-// Animation variants
-const floatingStars = {
-  initial: { y: 0, opacity: 1, scale: 0 },
+// Animation variants remain unchanged
+const starBurst = {
+  initial: { scale: 0, opacity: 1, x: 0, y: 0 },
+  animate: (i) => ({
+    scale: [0, 1.5, 0],
+    opacity: [1, 1, 0],
+    x: Math.cos((i * Math.PI) / 8) * 300,
+    y: Math.sin((i * Math.PI) / 8) * 300,
+    transition: { duration: 1, ease: "easeOut" },
+  }),
+};
+
+const swirlLine = {
+  initial: { pathLength: 0, opacity: 0 },
   animate: {
-    y: -100,
-    opacity: [1, 0],
-    scale: [1, 1.5],
-    transition: { duration: 1.5, ease: "linear", repeat: Infinity },
+    pathLength: [0, 1],
+    opacity: [0, 1, 0],
+    transition: { duration: 1.5, ease: "easeInOut" },
   },
 };
 
 const pointsBounce = {
   initial: { scale: 0, opacity: 0 },
   animate: {
-    scale: [0, 1.2, 1],
+    scale: [0, 1.3, 1],
     opacity: [0, 1, 1],
     transition: { duration: 0.8, times: [0, 0.5, 1] },
   },
@@ -28,7 +38,7 @@ const pointsBounce = {
 const scaleUp = {
   initial: { scale: 0 },
   animate: {
-    scale: [0, 1.5, 1],
+    scale: [0, 1.6, 1],
     transition: { duration: 0.6, times: [0, 0.8, 1] },
   },
 };
@@ -48,8 +58,10 @@ function MCQQuiz() {
   const [pointsGained, setPointsGained] = useState(0);
   const [showSummary, setShowSummary] = useState(false);
   const [incorrectAnswers, setIncorrectAnswers] = useState([]);
-  const [timer, setTimer] = useState(15);
-  const [level, setLevel] = useState(null);
+  const [recommendations, setRecommendations] = useState([]);
+  const [timer, setTimer] = useState(30);
+  const [level, setLevel] = useState("Beginner");
+  const [completionReason, setCompletionReason] = useState(null);
 
   const correctSoundRef = useRef(null);
   const incorrectSoundRef = useRef(null);
@@ -57,87 +69,91 @@ function MCQQuiz() {
   const completionSoundRef = useRef(null);
   const [soundEnabled, setSoundEnabled] = useState(true);
 
-  // Fetch initial question
+  // Existing useEffect and function definitions remain unchanged
   useEffect(() => {
     const fetchInitialQuestion = async () => {
       try {
         const token = sessionStorage.getItem("token");
-        if (!token) {
-          throw new Error("No authentication token found. Please log in.");
-        }
+        if (!token) throw new Error("No authentication token found. Please log in.");
         const response = await axios.post(
           "/api/v1/mcq",
-          { role: sessionStorage.getItem("jobRole"), chapter: sessionStorage.getItem("experience") },
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json",
-            },
-          }
+          { role: "SE", chapter: "Intern" },
+          { headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } }
         );
-
         const data = response.data;
         setQuizData(data);
         setPreviousPoints(data.points || 0);
         setSessionId(data.session_id);
-        setLevel(data.level);
-        setSelectedAnswers([]); // Explicitly reset selections on new question
+        setLevel(data.level || "Beginner");
+        setSelectedAnswers([]);
         if (data.done === true) {
           setQuizCompleted(true);
+          setCompletionReason("done");
         }
       } catch (error) {
         setError(`Failed to fetch question: ${error.message}`);
       }
     };
-
     fetchInitialQuestion();
   }, []);
 
-  // Timer effect
   useEffect(() => {
     if (!showResult && quizData && !quizCompleted && selectedAnswers.length === 0) {
-      setTimer(15);
+      setTimer(30);
       const intervalId = setInterval(() => {
-        setTimer((prevTimer) => {
-          if (prevTimer <= 1) {
+        setTimer((prev) => {
+          if (prev <= 1) {
             clearInterval(intervalId);
             handleSubmit();
             return 0;
           }
-          return prevTimer - 1;
+          return prev - 1;
         });
       }, 1000);
       return () => clearInterval(intervalId);
     }
   }, [quizData, showResult, quizCompleted]);
 
+  useEffect(() => {
+    if (showResult && lastAnswerCorrect !== null && soundEnabled) {
+      if (lastAnswerCorrect) {
+        correctSoundRef.current?.play().catch((e) => console.error("Error playing sound:", e));
+      } else {
+        incorrectSoundRef.current?.play().catch((e) => console.error("Error playing sound:", e));
+      }
+    }
+  }, [showResult, lastAnswerCorrect, soundEnabled]);
+
+  useEffect(() => {
+    if (showPointsAnimation && soundEnabled) {
+      pointsSoundRef.current?.play().catch((e) => console.error("Error playing sound:", e));
+    }
+  }, [showPointsAnimation, soundEnabled]);
+
+  useEffect(() => {
+    if (quizCompleted && soundEnabled) {
+      completionSoundRef.current?.play().catch((e) => console.error("Error playing sound:", e));
+    }
+  }, [quizCompleted, soundEnabled]);
+
   const handleAnswerSelect = (index) => {
     if (!showResult && !quizCompleted) {
       setSelectedAnswers((prev) =>
-        prev.includes(index)
-          ? prev.filter((i) => i !== index)
-          : [...prev, index]
+        prev.includes(index) ? prev.filter((i) => i !== index) : [...prev, index]
       );
     }
   };
 
-  const playSound = (soundRef) => {
-    if (soundEnabled && soundRef.current) {
-      soundRef.current.currentTime = 0;
-      soundRef.current.play().catch((e) => console.error("Error playing sound:", e));
-    }
-  };
-
   const triggerEnhancedConfetti = () => {
-    const count = 200;
+    const count = 300;
     const defaults = {
       origin: { y: 0.7 },
-      colors: ["#FF0000", "#FFA500", "#FFFF00", "#008000", "#0000FF"],
+      colors: ["#FF0000", "#FFA500", "#FFFF00", "#00FF00", "#0000FF", "#FF00FF"],
+      shapes: ["star", "circle"],
     };
-
-    confetti({ ...defaults, particleCount: count, spread: 100, scalar: 1.2 });
-    confetti({ ...defaults, particleCount: count, spread: 100, scalar: 1.2, angle: 60 });
-    confetti({ ...defaults, particleCount: count, spread: 100, scalar: 1.2, angle: 120 });
+    confetti({ ...defaults, particleCount: count, spread: 120, scalar: 1.3 });
+    confetti({ ...defaults, particleCount: count, spread: 120, scalar: 1.3, angle: 60 });
+    confetti({ ...defaults, particleCount: count, spread: 120, scalar: 1.3, angle: 120 });
   };
 
   const handleSubmit = async () => {
@@ -145,64 +161,54 @@ function MCQQuiz() {
       setError("Question data is not ready or session missing.");
       return;
     }
-
     try {
       const token = sessionStorage.getItem("token");
       const action = selectedAnswers.length > 0 ? selectedAnswers.join(",") : "-1";
       const response = await axios.post(
         "/api/v1/mcq/submit",
-        { action },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-            "X-Session-ID": sessionId,
-          },
-        }
+        { action, response_time: 3.0 },
+        { headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", "X-Session-ID": sessionId } }
       );
 
+      console.log("token", token);
       const data = response.data;
-      const isCorrect = data.is_correct;
+      const isCorrect = data.correct;
       setLastAnswerCorrect(isCorrect);
-      setLevel(data.level);
+      setLevel(data.level || "Beginner");
 
-      const correctAnswerData = data.correct_answer;
       setCorrectAnswer(
-        isCorrect || !correctAnswerData || typeof correctAnswerData !== "string"
+        isCorrect || !data.correct_answer || typeof data.correct_answer !== "string"
           ? null
-          : correctAnswerData.split(",").map(Number)
+          : data.correct_answer.split(",").map(Number)
       );
-
-      isCorrect ? playSound(correctSoundRef) : playSound(incorrectSoundRef);
 
       const newPoints = data.points || 0;
       const gainedPoints = newPoints - previousPoints;
       setPointsGained(gainedPoints);
-      if (gainedPoints > 0) {
+      if (gainedPoints > 0 && isCorrect) {
         setTimeout(() => {
           setShowPointsAnimation(true);
-          playSound(pointsSoundRef);
           triggerEnhancedConfetti();
         }, 500);
-        setTimeout(() => setShowPointsAnimation(false), 2500);
+        setTimeout(() => setShowPointsAnimation(false), 3000);
       } else {
         setShowPointsAnimation(false);
       }
 
       setPreviousPoints(newPoints);
       setQuizData(data);
-      setSelectedAnswers([]); // Reset selected answers immediately after loading the next question
+      setSelectedAnswers([]);
       setShowResult(true);
 
       if (data.done === true) {
         setQuizCompleted(true);
-        setTimeout(() => {
-          triggerEnhancedConfetti();
-          playSound(completionSoundRef);
-        }, 300);
+        setCompletionReason("done");
+        setTimeout(() => triggerEnhancedConfetti(), 300);
+      } else if (data.game_over === true) {
+        setQuizCompleted(true);
+        setCompletionReason("game_over");
       }
     } catch (error) {
-      console.error("Submit error:", error);
       setError(`Failed to submit answer: ${error.message}`);
     }
   };
@@ -211,38 +217,26 @@ function MCQQuiz() {
     setShowResult(false);
     setCorrectAnswer(null);
     setLastAnswerCorrect(null);
-    // No need to reset selectedAnswers here since it's already reset in handleSubmit
   };
 
   const handleCloseCompletionPopup = async () => {
     setQuizCompleted(false);
     try {
       const token = sessionStorage.getItem("token");
-      const response = await axios.get("/api/v1/mcq/incorrect", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-          "X-Session-ID": sessionId,
-        },
+      const response = await axios.get("/api/v1/mcq/report", {
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", "X-Session-ID": sessionId },
       });
       setIncorrectAnswers(response.data.incorrectAnswers || []);
+      setRecommendations(response.data.recommendations || []);
       setShowSummary(true);
     } catch (err) {
-      console.error("Error fetching incorrect answers:", err);
       navigate("/home");
     }
   };
 
   const handleCloseSummary = () => {
     setShowSummary(false);
-    navigate("/home");
-  };
-
-  const getLevelString = (points) => {
-    if (points < 100) return "Beginner";
-    if (points < 300) return "Intermediate";
-    if (points < 600) return "Advanced";
-    return "Expert";
+    navigate("/videos");
   };
 
   const toggleSound = () => setSoundEnabled(!soundEnabled);
@@ -250,26 +244,31 @@ function MCQQuiz() {
   const getOptionClassName = (index) => {
     let baseClass =
       "p-10 text-[16px] leading-[24px] font-medium font-poppins rounded-[20px] shadow-sm shadow-[#B120301A] text-center border transition-all ";
+    const isSelected = selectedAnswers.includes(index);
 
     if (!showResult) {
-      return selectedAnswers.includes(index)
+      return isSelected
         ? baseClass + "border-2 border-black bg-gray-100"
         : baseClass + "border-gray-200 hover:border-gray-300";
     } else {
-      const isSelected = selectedAnswers.includes(index);
-      const isCorrectAnswer = correctAnswer && correctAnswer.includes(index);
-
-      if (isCorrectAnswer) {
-        return baseClass + "border-2 border-[#1EFF00] bg-white text-[#1EFF00]";
+      if (lastAnswerCorrect) {
+        if (isSelected) {
+          return baseClass + "border-2 border-[#1EFF00] bg-white text-[#1EFF00]";
+        }
+        return baseClass + "border-gray-200";
+      } else {
+        const isCorrectAnswer = correctAnswer && correctAnswer.includes(index);
+        if (isCorrectAnswer) {
+          return baseClass + "border-2 border-[#1EFF00] bg-white text-[#1EFF00]";
+        } else if (isSelected) {
+          return baseClass + "border-2 border-[#DB0000] bg-white text-[#DB0000]";
+        }
+        return baseClass + "border-gray-200";
       }
-      if (isSelected && !isCorrectAnswer) {
-        return baseClass + "border-2 border-[#DB0000] bg-white text-[#DB0000] animate-shake";
-      }
-      return baseClass + "border-gray-200";
     }
   };
 
-  if (!quizData) {
+  if (!quizData || !quizData.options) {
     return (
       <div className="flex justify-center items-center min-h-screen">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-red-600"></div>
@@ -278,76 +277,66 @@ function MCQQuiz() {
     );
   }
 
-  const points = quizData.points || 0;
-  const levelString = getLevelString(points);
-
   return (
-    <div className="min-h-screen bg-white p-4 md:p-6 overflow-hidden">
+    <div className="min-h-screen bg-gray-50 p-4 md:p-6 overflow-hidden">
       <audio ref={correctSoundRef} src="/sounds/correct.mp3" preload="auto" />
       <audio ref={incorrectSoundRef} src="/sounds/incorrect.mp3" preload="auto" />
       <audio ref={pointsSoundRef} src="/sounds/points.mp3" preload="auto" />
       <audio ref={completionSoundRef} src="/sounds/completion.mp3" preload="auto" />
 
-      <button
-        onClick={toggleSound}
-        className="fixed top-4 right-4 p-2 bg-white rounded-full shadow-md z-10"
-        aria-label={soundEnabled ? "Mute sound" : "Unmute sound"}
-      >
-        {soundEnabled ? (
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-            <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-            <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
-          </svg>
-        ) : (
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-            <line x1="23" y1="9" x2="17" y2="15" />
-            <line x1="17" y1="9" x2="23" y2="15" />
-          </svg>
-        )}
-      </button>
+      <div className="fixed top-4 right-4 flex gap-2 z-10">
+  
+        <button
+          onClick={() => navigate('/home')}
+          className="p-2 bg-white rounded-full shadow-md hover:bg-gray-100 transition-colors"
+          aria-label="Stop Quiz"
+          title="Stop Quiz"
+        >
+          <X className="h-5 w-5 text-red-600" />
+        </button>
+      </div>
 
       <AnimatePresence>
-        {showPointsAnimation && (
+        {showPointsAnimation && lastAnswerCorrect && (
           <motion.div
             className="fixed inset-0 pointer-events-none z-50 flex items-center justify-center"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
+            <svg className="absolute w-full h-full" style={{ pointerEvents: "none" }}>
+              {[...Array(4)].map((_, i) => (
+                <motion.path
+                  key={`swirl-${i}`}
+                  d={`M${window.innerWidth / 2} ${window.innerHeight / 2} C${window.innerWidth * 0.3 * (i % 2 ? 1 : -1)} ${
+                    window.innerHeight * 0.3
+                  } ${window.innerWidth * 0.5 * (i % 2 ? -1 : 1)} ${window.innerHeight * 0.7} ${
+                    window.innerWidth * (i % 2 ? 0.2 : 0.8)
+                  } ${window.innerHeight * (i < 2 ? 0.1 : 0.9)}`}
+                  stroke={["#FF0000", "#00FF00", "#0000FF", "#FFFF00"][i]}
+                  strokeWidth="4"
+                  fill="none"
+                  variants={swirlLine}
+                  initial="initial"
+                  animate="animate"
+                />
+              ))}
+            </svg>
             <div className="relative w-full h-full overflow-hidden">
-              {[...Array(30)].map((_, i) => (
+              {[...Array(16)].map((_, i) => (
                 <motion.div
                   key={`star-${i}`}
                   className="absolute text-2xl"
                   style={{
-                    left: `${Math.random() * 100}%`,
-                    top: `${Math.random() * 100}%`,
+                    left: "50%",
+                    top: "50%",
+                    color: ["#FFD700", "#FF69B4", "#00CED1", "#ADFF2F"][i % 4],
+                    fontSize: `${1.5 + (i % 3)}rem`,
                   }}
-                  variants={floatingStars}
+                  variants={starBurst}
                   initial="initial"
                   animate="animate"
+                  custom={i}
                 >
                   ⭐
                 </motion.div>
@@ -360,37 +349,33 @@ function MCQQuiz() {
               transition={{ type: "spring", stiffness: 300 }}
             >
               <motion.div
-                className="bg-gradient-to-r from-yellow-400 to-red-500 rounded-full p-4 shadow-xl"
+                className="bg-gradient-to-r from-green-400 to-blue-500 rounded-full p-6 shadow-2xl"
+                style={{ filter: "drop-shadow(0 0 10px rgba(0, 255, 0, 0.5))" }}
                 variants={scaleUp}
                 initial="initial"
                 animate="animate"
               >
                 <motion.div
-                  className="text-6xl font-bold text-white flex items-center"
+                  className="text-7xl font-bold text-white flex items-center"
                   variants={pointsBounce}
                 >
-                  <motion.span className="mr-2">🎉</motion.span>
+                  <motion.span className="mr-3">🎉</motion.span>
                   <motion.span
-                    className="block"
-                    animate={{ scale: [1, 1.2, 1], rotate: [0, 10, -10, 0] }}
-                    transition={{
-                      duration: 0.5,
-                      repeat: Infinity,
-                      repeatType: "mirror",
-                    }}
+                    animate={{ scale: [1, 1.3, 1], rotate: [0, 15, -15, 0] }}
+                    transition={{ duration: 0.5, repeat: 3 }}
                   >
                     +{pointsGained}
                   </motion.span>
-                  <motion.span className="ml-2">🏆</motion.span>
+                  <motion.span className="ml-3">🏆</motion.span>
                 </motion.div>
               </motion.div>
               <motion.div
-                className="mt-4 text-2xl font-semibold text-yellow-400"
+                className="mt-6 text-3xl font-bold text-green-300"
                 initial={{ opacity: 0 }}
-                animate={{ opacity: [0, 1, 0], scale: [0.8, 1.2, 1] }}
+                animate={{ opacity: [0, 1, 0], scale: [0.8, 1.3, 1] }}
                 transition={{ duration: 1.5, times: [0, 0.5, 1] }}
               >
-                Keep it up!
+                Awesome Work!
               </motion.div>
             </motion.div>
           </motion.div>
@@ -398,13 +383,10 @@ function MCQQuiz() {
       </AnimatePresence>
 
       <div className="max-w-[650px] mx-auto p-4 mb-12">
-        <div className="bg-white rounded-full border border-[#B12030] p-1.5 flex flex-col sm:flex-row gap-2">
+        <div className="bg-white rounded-full border border-[#B12030] p-1.5 flex flex-col sm:flex-row gap-2 shadow-sm">
           <div className="flex">
-            <button className="bg-red-700 text-white rounded-full py-3 px-5 flex items-center gap-4">
+            <button className="bg-red-700 text-white rounded-full py-3 px-5 flex items-center gap-4 hover:bg-red-800 transition-colors">
               <div className="flex items-center gap-3">
-                <div className="rounded-full flex items-center justify-center">
-                  <svg width="24" height="32" viewBox="0 0 20 28" fill="none" xmlns="http://www.w3.org/2000/svg" />
-                </div>
                 <div className="text-left">
                   <div className="font-semibold text-[12px] leading-[18px] font-poppins">
                     Current Role
@@ -420,9 +402,6 @@ function MCQQuiz() {
           <div className="flex">
             <button className="bg-white rounded-full py-3 px-5 flex items-center gap-10 hover:bg-gray-50 transition-colors">
               <div className="flex items-center gap-3">
-                <div className="rounded-full flex items-center justify-center">
-                  <svg width="21" height="27" viewBox="0 0 21 27" fill="none" xmlns="http://www.w3.org/2000/svg" />
-                </div>
                 <div className="text-left">
                   <div className="font-semibold text-[12px] leading-[18px] font-poppins">
                     Experience Level
@@ -449,27 +428,15 @@ function MCQQuiz() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5 }}
             >
-              {levelString}
-            </motion.span>
-          </div>
-          <div className="flex items-center">
-            <span className="font-medium text-gray-700 mr-2">Points:</span>
-            <motion.span
-              className="font-bold text-red-700"
-              key={points}
-              initial={{ scale: 1 }}
-              animate={{ scale: [1, 1.2, 1] }}
-              transition={{ duration: 0.5 }}
-            >
-              {points}
+              {level}
             </motion.span>
           </div>
         </div>
       </div>
 
-      <div className="max-w-[1167px] mx-auto">
+      <div className="max-wxs-[1167px] mx-auto">
         <motion.div
-          className="p-[50px] max-w-[862px] border border-[#B120301A]/10 rounded-[40px] mx-auto shadow-md shadow-[#B120301A]/10 mb-10"
+          className="p-[50px] max-w-[862px] border border-[#B120301A]/10 rounded-[40px] mx-auto shadow-md shadow-[#B120301A]/10 mb-10 bg-white"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
@@ -482,34 +449,44 @@ function MCQQuiz() {
 
         {!showResult && !quizCompleted && selectedAnswers.length === 0 && (
           <div className="text-center mb-4">
-            <p
-              className={`text-lg font-semibold ${
-                timer <= 5 ? "text-red-600" : "text-black"
-              }`}
-            >
+            <p className={`text-lg font-semibold ${timer <= 5 ? "text-red-600" : "text-black"}`}>
               Time left: {timer} seconds
             </p>
           </div>
         )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-          {quizData.options.map((option, index) => (
-            <motion.button
-              key={`${quizData.question}-${index}`} // Unique key per question
-              onClick={() => handleAnswerSelect(index)}
-              className={getOptionClassName(index)}
-              disabled={showResult || quizCompleted}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, delay: 0.1 * index }}
-              whileHover={!showResult && !quizCompleted ? { scale: 1.02 } : {}}
-              whileTap={!showResult && !quizCompleted ? { scale: 0.98 } : {}}
-            >
-              <div className="flex items-center justify-center gap-2">
-                <span>{option}</span>
-              </div>
-            </motion.button>
-          ))}
+          {quizData.options.map((option, index) => {
+            const isSelected = selectedAnswers.includes(index);
+            const isCorrectAnswer = correctAnswer && correctAnswer.includes(index);
+            return (
+              <motion.button
+                key={`${quizData.question}-${index}`}
+                onClick={() => handleAnswerSelect(index)}
+                className={getOptionClassName(index)}
+                disabled={showResult || quizCompleted}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{
+                  opacity: 1,
+                  y: 0,
+                  ...(showResult && lastAnswerCorrect && isSelected
+                    ? { scale: [1, 1.1, 1], transition: { duration: 0.5, repeat: 4 } }
+                    : showResult && !lastAnswerCorrect && isCorrectAnswer
+                    ? { scale: [1, 1.1, 1], transition: { duration: 0.5, repeat: 4 } }
+                    : showResult && !lastAnswerCorrect && isSelected
+                    ? { x: [-5, 5, -5, 5, 0], transition: { duration: 0.5 } }
+                    : {}),
+                }}
+                transition={{ duration: 0.3, delay: 0.1 * index }}
+                whileHover={!showResult && !quizCompleted ? { scale: 1.02 } : {}}
+                whileTap={!showResult && !quizCompleted ? { scale: 0.98 } : {}}
+              >
+                <div className="flex items-center justify-center gap-2">
+                  <span>{option}</span>
+                </div>
+              </motion.button>
+            );
+          })}
         </div>
 
         {!showResult && !quizCompleted && (
@@ -553,9 +530,7 @@ function MCQQuiz() {
                         <div className="text-green-400 font-bold">Correct :)</div>
                         <div>
                           {selectedAnswers.length > 0
-                            ? `Selected: ${selectedAnswers
-                                .map((idx) => quizData.options[idx])
-                                .join(", ")}`
+                            ? `Selected: ${selectedAnswers.map((idx) => quizData.options[idx]).join(", ")}`
                             : "No answers selected"}
                         </div>
                       </div>
@@ -568,19 +543,8 @@ function MCQQuiz() {
                         animate={{ rotate: [0, -10, 10, -10, 0] }}
                         transition={{ duration: 0.5 }}
                       >
-                        <svg
-                          width="24"
-                          height="24"
-                          viewBox="0 0 103 94"
-                          fill="none"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path
-                            d="M32 32L72 72M72 32L32 72"
-                            stroke="#DB0000"
-                            strokeWidth="6"
-                            strokeLinecap="round"
-                          />
+                        <svg width="24" height="24" viewBox="0 0 103 94" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M32 32L72 72M72 32L32 72" stroke="#DB0000" strokeWidth="6" strokeLinecap="round" />
                         </svg>
                       </motion.div>
                       <div>
@@ -625,49 +589,21 @@ function MCQQuiz() {
                   >
                     <Check className="h-10 w-10 text-green-500" />
                   </motion.div>
-                  <motion.h2
-                    className="text-2xl font-bold text-gray-800 mb-2"
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.4 }}
-                  >
-                    Congratulations!
+                  <motion.h2 className="text-2xl font-bold text-gray-800 mb-2">
+                    {completionReason === "done" ? "Congratulations!" : "Game Over"}
                   </motion.h2>
-                  <motion.p
-                    className="text-gray-600 mb-6"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 0.6 }}
-                  >
-                    You’ve completed the quiz successfully!
+                  <motion.p className="text-gray-600 mb-6">
+                    {completionReason === "done" ? "You’ve completed the quiz successfully!" : "Better luck next time!"}
                   </motion.p>
-                  <motion.p
-                    className="font-bold text-xl text-red-600 mb-2"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 0.8 }}
-                  >
-                    Final Score: {points} points
-                  </motion.p>
-                  <motion.p
-                    className="font-medium text-gray-700 mb-6"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 1 }}
-                  >
-                    Level achieved: {levelString}
-                  </motion.p>
+                  <motion.p className="font-medium text-gray-700 mb-6">Level achieved: {level}</motion.p>
                 </div>
                 <motion.button
                   onClick={handleCloseCompletionPopup}
                   className="bg-red-600 text-white px-6 py-3 rounded-full hover:bg-red-700 transition-colors w-full font-medium"
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 1.2 }}
                 >
-                  Continue
+                  View Report
                 </motion.button>
               </motion.div>
             </motion.div>
@@ -683,28 +619,30 @@ function MCQQuiz() {
               exit={{ opacity: 0 }}
             >
               <motion.div
-                className="bg-white rounded-lg p-8 max-w-md w-full text-center"
+                className="bg-white rounded-lg p-8 max-w-lg w-full text-center"
                 initial={{ scale: 0.8, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 transition={{ type: "spring", damping: 20 }}
               >
-                <h2 className="text-2xl font-bold mb-4">Summary of Incorrect Answers</h2>
-                <div className="text-left max-h-96 overflow-y-auto pr-2">
-                  {incorrectAnswers.length > 0 ? (
-                    incorrectAnswers.map((item, idx) => (
-                      <div key={idx} className="mb-4 border-b pb-3">
-                        <p className="font-semibold">Question: {item.question}</p>
-                        <p>Correct Answer: {item.correctAnswer}</p>
-                        <p>Your Answer: {item.givenAnswer}</p>
-                      </div>
-                    ))
+                <h2 className="text-2xl font-bold text-gray-800 mb-6">Quiz Report</h2>
+                <div className="text-left max-h-[60vh] overflow-y-auto pr-4">
+                  <h3 className="text-lg font-semibold text-gray-700 mb-4">Recommendations for Improvement</h3>
+                  {recommendations.length > 0 ? (
+                    <ul className="list-disc list-inside text-gray-600 space-y-2">
+                      {recommendations.map((rec, idx) => (
+                        <li key={idx} className="text-left flex items-start">
+                          <span className="text-red-600 mr-2">•</span>
+                          <span>{rec}</span>
+                        </li>
+                      ))}
+                    </ul>
                   ) : (
-                    <p>No incorrect answers found!</p>
+                    <p className="text-gray-600">No recommendations available.</p>
                   )}
                 </div>
                 <button
                   onClick={handleCloseSummary}
-                  className="bg-red-600 text-white px-6 py-3 rounded-full hover:bg-red-700 transition-colors w-full font-medium mt-4"
+                  className="bg-red-600 text-white px-6 py-3 rounded-full hover:bg-red-700 transition-colors w-full font-medium mt-6"
                 >
                   Close
                 </button>
