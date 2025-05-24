@@ -45,6 +45,15 @@ const scaleUp = {
 
 function MCQQuiz() {
   const navigate = useNavigate();
+
+  // Selection states
+  const [selectedRole, setSelectedRole] = useState("SE");
+  const [selectedExperience, setSelectedExperience] = useState("Intern");
+  const [isRoleDropdownOpen, setIsRoleDropdownOpen] = useState(false);
+  const [isExperienceDropdownOpen, setIsExperienceDropdownOpen] = useState(false);
+  const [quizStarted, setQuizStarted] = useState(false);
+
+  // Quiz states
   const [quizData, setQuizData] = useState(null);
   const [selectedAnswers, setSelectedAnswers] = useState([]);
   const [lastSubmittedAnswers, setLastSubmittedAnswers] = useState([]);
@@ -70,33 +79,39 @@ function MCQQuiz() {
   const completionSoundRef = useRef(null);
   const [soundEnabled, setSoundEnabled] = useState(true);
 
-  // Fetch initial question
-  useEffect(() => {
-    const fetchInitialQuestion = async () => {
-      try {
-        const token = sessionStorage.getItem("token");
-        if (!token) throw new Error("No authentication token found. Please log in.");
-        const response = await axios.post(
-          "/api/v1/mcq",
-          { role: "SE", chapter: "Intern" },
-          { headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } }
-        );
-        const data = response.data;
-        setQuizData(data);
-        setPreviousPoints(data.points || 0);
-        setSessionId(data.session_id);
-        setLevel(data.level || "Beginner");
-        setSelectedAnswers([]);
-        if (data.done === true) {
-          setQuizCompleted(true);
-          setCompletionReason("done");
-        }
-      } catch (error) {
-        setError(`Failed to fetch question: ${error.message}`);
+  const roles = ["SE", "QA", "PM"];
+  const experienceLevels = ["Intern", "Associate", "Senior"];
+  const roleDisplayNames = {
+    SE: "Software Engineer",
+    QA: "Quality Assurance",
+    PM: "Project Manager",
+  };
+
+  // Function to start the quiz
+  const startQuiz = async () => {
+    try {
+      const token = sessionStorage.getItem("token");
+      if (!token) throw new Error("No authentication token found. Please log in.");
+      const response = await axios.post(
+        "/api/v1/mcq",
+        { role: selectedRole, chapter: selectedExperience },
+        { headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } }
+      );
+      const data = response.data;
+      setQuizData(data);
+      setPreviousPoints(data.points || 0);
+      setSessionId(data.session_id);
+      setLevel(data.level || "Beginner");
+      setSelectedAnswers([]);
+      if (data.done === true) {
+        setQuizCompleted(true);
+        setCompletionReason("done");
       }
-    };
-    fetchInitialQuestion();
-  }, []);
+      setQuizStarted(true);
+    } catch (error) {
+      setError(`Failed to start quiz: ${error.message}`);
+    }
+  };
 
   // Timer logic
   useEffect(() => {
@@ -273,15 +288,6 @@ function MCQQuiz() {
     }
   };
 
-  if (!quizData || !quizData.options) {
-    return (
-      <div className="flex justify-center items-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-red-600"></div>
-        {error && <p className="text-red-600 mt-4">{error}</p>}
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-6 overflow-hidden">
       <audio ref={correctSoundRef} src="/sounds/correct.mp3" preload="auto" />
@@ -289,402 +295,447 @@ function MCQQuiz() {
       <audio ref={pointsSoundRef} src="/sounds/points.mp3" preload="auto" />
       <audio ref={completionSoundRef} src="/sounds/completion.mp3" preload="auto" />
 
-      <div className="fixed top-4 right-4 flex gap-2 z-10">
-        <button
-          onClick={() => handleCloseCompletionPopup()}
-          className="p-2 bg-white rounded-full shadow-md hover:bg-gray-100 transition-colors"
-          aria-label="Stop Quiz"
-          title="Stop Quiz"
-        >
-          <X className="h-5 w-5 text-red-600" />
-        </button>
-      </div>
-
-      <AnimatePresence>
-        {showPointsAnimation && lastAnswerCorrect && (
-          <motion.div
-            className="fixed inset-0 pointer-events-none z-50 flex items-center justify-center"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          >
-            <svg className="absolute w-full h-full" style={{ pointerEvents: "none" }}>
-              {[...Array(4)].map((_, i) => (
-                <motion.path
-                  key={`swirl-${i}`}
-                  d={`M${window.innerWidth / 2} ${window.innerHeight / 2} C${window.innerWidth * 0.3 * (i % 2 ? 1 : -1)} ${
-                    window.innerHeight * 0.3
-                  } ${window.innerWidth * 0.5 * (i % 2 ? -1 : 1)} ${window.innerHeight * 0.7} ${
-                    window.innerWidth * (i % 2 ? 0.2 : 0.8)
-                  } ${window.innerHeight * (i < 2 ? 0.1 : 0.9)}`}
-                  stroke={["#FF0000", "#00FF00", "#0000FF", "#FFFF00"][i]}
-                  strokeWidth="4"
-                  fill="none"
-                  variants={swirlLine}
-                  initial="initial"
-                  animate="animate"
-                />
-              ))}
-            </svg>
-            <div className="relative w-full h-full overflow-hidden">
-              {[...Array(16)].map((_, i) => (
-                <motion.div
-                  key={`star-${i}`}
-                  className="absolute text-2xl"
-                  style={{
-                    left: "50%",
-                    top: "50%",
-                    color: ["#FFD700", "#FF69B4", "#00CED1", "#ADFF2F"][i % 4],
-                    fontSize: `${1.5 + (i % 3)}rem`,
-                  }}
-                  variants={starBurst}
-                  initial="initial"
-                  animate="animate"
-                  custom={i}
+      {!quizStarted ? (
+        <div className="flex flex-col items-center justify-center min-h-screen">
+          <div className="bg-white rounded-lg p-8 shadow-md max-w-md w-full">
+            <h2 className="text-2xl font-bold mb-6 text-center text-gray-800">
+              Select Your Role and Experience Level
+            </h2>
+            <div className="space-y-4">
+              <div className="relative">
+                <button
+                  onClick={() => setIsRoleDropdownOpen(!isRoleDropdownOpen)}
+                  className="w-full bg-red-700 text-white rounded-full py-3 px-5 flex items-center justify-between hover:bg-red-800 transition-colors"
                 >
-                  ⭐
-                </motion.div>
-              ))}
+                  <span className="font-medium">{roleDisplayNames[selectedRole]}</span>
+                  <ChevronDown className="h-5 w-5" />
+                </button>
+                {isRoleDropdownOpen && (
+                  <div className="absolute top-full left-0 mt-2 w-full bg-white rounded-md shadow-lg z-10">
+                    {roles.map((role) => (
+                      <button
+                        key={role}
+                        onClick={() => {
+                          setSelectedRole(role);
+                          setIsRoleDropdownOpen(false);
+                        }}
+                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                      >
+                        {roleDisplayNames[role]}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="relative">
+                <button
+                  onClick={() => setIsExperienceDropdownOpen(!isExperienceDropdownOpen)}
+                  className="w-full bg-white border border-gray-200 rounded-full py-3 px-5 flex items-center justify-between hover:bg-gray-50 transition-colors"
+                >
+                  <span className="font-medium text-gray-700">{selectedExperience}</span>
+                  <ChevronDown className="h-5 w-5 text-black" />
+                </button>
+                {isExperienceDropdownOpen && (
+                  <div className="absolute top-full left-0 mt-2 w-full bg-white rounded-md shadow-lg z-10">
+                    {experienceLevels.map((level) => (
+                      <button
+                        key={level}
+                        onClick={() => {
+                          setSelectedExperience(level);
+                          setIsExperienceDropdownOpen(false);
+                        }}
+                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                      >
+                        {level}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
-            <motion.div
-              className="flex flex-col items-center z-50"
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ type: "spring", stiffness: 300 }}
+            <button
+              onClick={startQuiz}
+              className="mt-6 w-full bg-green-600 text-white px-6 py-3 rounded-full hover:bg-green-700 transition-colors font-medium"
             >
-              <motion.div
-                className="bg-gradient-to-r from-green-400 to-blue-500 rounded-full p-6 shadow-2xl"
-                style={{ filter: "drop-shadow(0 0 10px rgba(0, 255, 0, 0.5))" }}
-                variants={scaleUp}
-                initial="initial"
-                animate="animate"
-              >
-                <motion.div
-                  className="text-7xl font-bold text-white flex items-center"
-                  variants={pointsBounce}
-                >
-                  <motion.span className="mr-3">🎉</motion.span>
-                  <motion.span
-                    animate={{ scale: [1, 1.3, 1], rotate: [0, 15, -15, 0] }}
-                    transition={{ duration: 0.5, repeat: 3 }}
-                  >
-                    +{pointsGained}
-                  </motion.span>
-                  <motion.span className="ml-3">🏆</motion.span>
-                </motion.div>
-              </motion.div>
-              <motion.div
-                className="mt-6 text-3xl font-bold text-green-300"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: [0, 1, 0], scale: [0.8, 1.3, 1] }}
-                transition={{ duration: 1.5, times: [0, 0.5, 1] }}
-              >
-                Awesome Work!
-              </motion.div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <div className="max-w-[650px] mx-auto p-4 mb-12">
-        <div className="bg-white rounded-full border border-[#B12030] p-1.5 flex flex-col sm:flex-row gap-2 shadow-sm">
-          <div className="flex">
-            <button className="bg-red-700 text-white rounded-full py-3 px-5 flex items-center gap-4 hover:bg-red-800 transition-colors">
-              <div className="flex items-center gap-3">
-                <div className="text-left">
-                  <div className="font-semibold text-[12px] leading-[18px] font-poppins">
-                    Current Role
-                  </div>
-                  <div className="font-medium text-[10px] leading-[15px] font-poppins">
-                    Software Engineer
-                  </div>
-                </div>
-              </div>
-              <ChevronDown className="h-5 w-5" />
+              Start Quiz
             </button>
-          </div>
-          <div className="flex">
-            <button className="bg-white rounded-full py-3 px-5 flex items-center gap-10 hover:bg-gray-50 transition-colors">
-              <div className="flex items-center gap-3">
-                <div className="text-left">
-                  <div className="font-semibold text-[12px] leading-[18px] font-poppins">
-                    Experience Level
-                  </div>
-                  <div className="font-semibold text-[10px] leading-[15px] font-poppins">
-                    Junior
-                  </div>
-                </div>
-              </div>
-              <ChevronDown className="h-5 w-5 text-black" />
-            </button>
+            {error && <p className="text-red-600 mt-4 text-center">{error}</p>}
           </div>
         </div>
-      </div>
-
-      <div className="max-w-[1167px] mx-auto mb-8">
-        <div className="flex justify-between items-center max-w-[862px] mx-auto border-b border-gray-200 pb-4 mb-8">
-          <div className="flex items-center">
-            <span className="font-medium text-gray-700 mr-2">Level:</span>
-            <motion.span
-              className="font-bold text-red-700"
-              key={level}
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-            >
-              {level}
-            </motion.span>
-          </div>
-        </div>
-      </div>
-
-      <div className="max-wxs-[1167px] mx-auto">
-        <motion.div
-          className="p-[50px] max-w-[862px] border border-[#B120301A]/10 rounded-[40px] mx-auto shadow-md shadow-[#B120301A]/10 mb-10 bg-white"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          key={quizData.question}
-        >
-          <div className="text-[22px] leading-[33px] font-medium font-poppins text-[#564D4D] text-center mb-8">
-            {quizData.question}
-          </div>
-        </motion.div>
-
-        {!showResult && !quizCompleted && selectedAnswers.length === 0 && (
-          <div className="text-center mb-4">
-            <p className={`text-lg font-semibold ${timer <= 5 ? "text-red-600" : "text-black"}`}>
-              Time left: {timer} seconds
-            </p>
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-          {quizData.options.map((option, index) => {
-            const isSelected = selectedAnswers.includes(index);
-            const isCorrectAnswer = correctAnswer && correctAnswer.includes(index);
-            return (
-              <motion.button
-                key={`${quizData.question}-${index}`}
-                onClick={() => handleAnswerSelect(index)}
-                className={getOptionClassName(index)}
-                disabled={showResult || quizCompleted}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{
-                  opacity: 1,
-                  y: 0,
-                  ...(showResult && lastAnswerCorrect && isSelected
-                    ? { scale: [1, 1.1, 1], transition: { duration: 0.5, repeat: 4 } }
-                    : showResult && !lastAnswerCorrect && isCorrectAnswer
-                    ? { scale: [1, 1.1, 1], transition: { duration: 0.5, repeat: 4 } }
-                    : showResult && !lastAnswerCorrect && isSelected
-                    ? { x: [-5, 5, -5, 5, 0], transition: { duration: 0.5 } }
-                    : {}),
-                }}
-                transition={{ duration: 0.3, delay: 0.1 * index }}
-                whileHover={!showResult && !quizCompleted ? { scale: 1.02 } : {}}
-                whileTap={!showResult && !quizCompleted ? { scale: 0.98 } : {}}
-              >
-                <div className="flex items-center justify-center gap-2">
-                  <span>{option}</span>
-                </div>
-              </motion.button>
-            );
-          })}
-        </div>
-
-        {!showResult && !quizCompleted && (
-          <div className="flex justify-center mb-8">
-            <motion.button
-              onClick={handleSubmit}
-              disabled={selectedAnswers.length === 0}
-              className="bg-red-600 text-white px-6 py-2 rounded-full hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-            >
-              Submit Answer
-            </motion.button>
-          </div>
-        )}
-
-        <AnimatePresence>
-          {showResult && !quizCompleted && (
-            lastAnswerCorrect ? (
-              <motion.div
-                className="fixed inset-0 bg-opacity-75 flex items-center justify-center z-50"
-                style={{ background: "rgba(0, 128, 0, 0.75)" }}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-              >
-                <svg className="absolute w-full h-full" style={{ pointerEvents: "none" }}>
-                  {[...Array(10)].map((_, i) => (
-                    <motion.line
-                      key={`line-${i}`}
-                      x1={`${Math.random() * 100}%`}
-                      y1={`${Math.random() * 100}%`}
-                      x2={`${Math.random() * 100}%`}
-                      y2={`${Math.random() * 100}%`}
-                      stroke={["#ffffff", "#ffcc00", "#ff6699", "#66ccff"][i % 4]}
-                      strokeWidth="2"
-                      initial={{ pathLength: 0 }}
-                      animate={{ pathLength: 1 }}
-                      transition={{ duration: 1, ease: "easeInOut" }}
-                    />
-                  ))}
-                </svg>
-                <motion.div
-                  className="bg-white rounded-lg p-8 max-w-md w-full text-center relative z-10"
-                  initial={{ scale: 0.8, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  transition={{ type: "spring", damping: 20 }}
+      ) : (
+        <div>
+          {(!quizData || !quizData.options) ? (
+            <div className="flex justify-center items-center min-h-screen">
+              <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-red-600"></div>
+              {error && <p className="text-red-600 mt-4">{error}</p>}
+            </div>
+          ) : (
+            <>
+              <div className="fixed top-4 right-4 flex gap-2 z-10">
+                <button
+                  onClick={() => handleCloseCompletionPopup()}
+                  className="p-2 bg-white rounded-full shadow-md hover:bg-gray-100 transition-colors"
+                  aria-label="Stop Quiz"
+                  title="Stop Quiz"
                 >
+                  <X className="h-5 w-5 text-red-600" />
+                </button>
+              </div>
+
+              <AnimatePresence>
+                {showPointsAnimation && lastAnswerCorrect && (
                   <motion.div
-                    className="text-6xl mb-4"
-                    initial={{ y: -100 }}
-                    animate={{ y: 0 }}
-                    transition={{ type: "spring", stiffness: 300, damping: 10 }}
+                    className="fixed inset-0 pointer-events-none z-50 flex items-center justify-center"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
                   >
-                    🎉
-                  </motion.div>
-                  <h2 className="text-2xl font-bold text-green-600 mb-2">Fantastic Job!</h2>
-                  <p className="text-gray-600 mb-4">You nailed it! Keep up the amazing work!</p>
-                  <p className="text-gray-500 mb-6">
-                    Selected: {lastSubmittedAnswers.map((idx) => quizData.options[idx]).join(", ")}
-                  </p>
-                  <motion.button
-                    onClick={handleNext}
-                    className="bg-green-600 text-white px-6 py-3 rounded-full hover:bg-green-700 transition-colors"
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                  >
-                    Next Question
-                  </motion.button>
-                </motion.div>
-              </motion.div>
-            ) : (
-              <motion.div
-                className="fixed bottom-0 left-0 right-0 h-[150px] text-white px-4 py-12 bg-red-600"
-                initial={{ y: 150, scale: 0.8 }}
-                animate={{ y: 0, scale: 1 }}
-                exit={{ y: 150 }}
-                transition={{ type: "spring", stiffness: 300, damping: 15 }}
-              >
-                <div className="max-w-7xl mx-auto flex items-center justify-between">
-                  <div className="flex items-center gap-3">
+                    <svg className="absolute w-full h-full" style={{ pointerEvents: "none" }}>
+                      {[...Array(4)].map((_, i) => (
+                        <motion.path
+                          key={`swirl-${i}`}
+                          d={`M${window.innerWidth / 2} ${window.innerHeight / 2} C${window.innerWidth * 0.3 * (i % 2 ? 1 : -1)} ${
+                            window.innerHeight * 0.3
+                          } ${window.innerWidth * 0.5 * (i % 2 ? -1 : 1)} ${window.innerHeight * 0.7} ${
+                            window.innerWidth * (i % 2 ? 0.2 : 0.8)
+                          } ${window.innerHeight * (i < 2 ? 0.1 : 0.9)}`}
+                          stroke={["#FF0000", "#00FF00", "#0000FF", "#FFFF00"][i]}
+                          strokeWidth="4"
+                          fill="none"
+                          variants={swirlLine}
+                          initial="initial"
+                          animate="animate"
+                        />
+                      ))}
+                    </svg>
+                    <div className="relative w-full h-full overflow-hidden">
+                      {[...Array(16)].map((_, i) => (
+                        <motion.div
+                          key={`star-${i}`}
+                          className="absolute text-2xl"
+                          style={{
+                            left: "50%",
+                            top: "50%",
+                            color: ["#FFD700", "#FF69B4", "#00CED1", "#ADFF2F"][i % 4],
+                            fontSize: `${1.5 + (i % 3)}rem`,
+                          }}
+                          variants={starBurst}
+                          initial="initial"
+                          animate="animate"
+                          custom={i}
+                        >
+                          ⭐
+                        </motion.div>
+                      ))}
+                    </div>
                     <motion.div
-                      className="rounded-full p-2"
-                      initial={{ rotate: 0 }}
-                      animate={{ rotate: [0, -10, 10, -10, 0] }}
+                      className="flex flex-col items-center z-50"
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      transition={{ type: "spring", stiffness: 300 }}
+                    >
+                      <motion.div
+                        className="bg-gradient-to-r from-green-400 to-blue-500 rounded-full p-6 shadow-2xl"
+                        style={{ filter: "drop-shadow(0 0 10px rgba(0, 255, 0, 0.5))" }}
+                        variants={scaleUp}
+                        initial="initial"
+                        animate="animate"
+                      >
+                        <motion.div
+                          className="text-7xl font-bold text-white flex items-center"
+                          variants={pointsBounce}
+                        >
+                          <motion.span className="mr-3">🎉</motion.span>
+                          <motion.span
+                            animate={{ scale: [1, 1.3, 1], rotate: [0, 15, -15, 0] }}
+                            transition={{ duration: 0.5, repeat: 3 }}
+                          >
+                            +{pointsGained}
+                          </motion.span>
+                          <motion.span className="ml-3">🏆</motion.span>
+                        </motion.div>
+                      </motion.div>
+                      <motion.div
+                        className="mt-6 text-3xl font-bold text-green-300"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: [0, 1, 0], scale: [0.8, 1.3, 1] }}
+                        transition={{ duration: 1.5, times: [0, 0.5, 1] }}
+                      >
+                        Awesome Work!
+                      </motion.div>
+                    </motion.div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              <div className="max-w-[1167px] mx-auto mb-8">
+                <div className="flex justify-between items-center max-w-[862px] mx-auto border-b border-gray-200 pb-4 mb-8">
+                  <div className="flex items-center">
+                    <span className="font-medium text-gray-700 mr-2">Level:</span>
+                    <motion.span
+                      className="font-bold text-red-700"
+                      key={level}
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
                       transition={{ duration: 0.5 }}
                     >
-                      <svg width="24" height="24" viewBox="0 0 103 94" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M32 32L72 72M72 32L32 72" stroke="#DB0000" strokeWidth="6" strokeLinecap="round" />
-                      </svg>
-                    </motion.div>
-                    <div>
-                      <div className="text-red-400 font-bold">Your answer is incorrect. Dont give up</div>
-                    </div>
+                      {level}
+                    </motion.span>
                   </div>
-                  <motion.button
-                    onClick={handleNext}
-                    className="bg-red-600 text-white px-4 py-2 rounded-full hover:bg-red-700 transition-colors"
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                  >
-                    Start Next Question
-                  </motion.button>
                 </div>
-              </motion.div>
-            )
-          )}
-        </AnimatePresence>
+              </div>
 
-        <AnimatePresence>
-          {quizCompleted && (
-            <motion.div
-              className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-            >
-              <motion.div
-                className="bg-white rounded-lg p-8 max-w-md w-full text-center"
-                initial={{ scale: 0.8, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ type: "spring", damping: 20 }}
-              >
-                <div className="mb-4">
-                  <motion.div
-                    className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4"
-                    initial={{ scale: 0 }}
-                    animate={{ scale: [0, 1.2, 1] }}
-                    transition={{ duration: 0.6, delay: 0.2 }}
-                  >
-                    <Check className="h-10 w-10 text-green-500" />
-                  </motion.div>
-                  <motion.h2 className="text-2xl font-bold text-gray-800 mb-2">
-                    {completionReason === "done" ? "Congratulations!" : "Game Over"}
-                  </motion.h2>
-                  <motion.p className="text-gray-600 mb-6">
-                    {completionReason === "done" ? "You’ve completed the quiz successfully!" : "Better luck next time!"}
-                  </motion.p>
-                  <motion.p className="font-medium text-gray-700 mb-6">Level achieved: {level}</motion.p>
-                </div>
-                <motion.button
-                  onClick={handleCloseCompletionPopup}
-                  className="bg-red-600 text-white px-6 py-3 rounded-full hover:bg-red-700 transition-colors w-full font-medium"
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
+              <div className="max-w-[1167px] mx-auto">
+                <motion.div
+                  className="p-[50px] max-w-[862px] border border-[#B120301A]/10 rounded-[40px] mx-auto shadow-md shadow-[#B120301A]/10 mb-10 bg-white"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5 }}
+                  key={quizData.question}
                 >
-                  View Report
-                </motion.button>
-              </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+                  <div className="text-[22px] leading-[33px] font-medium font-poppins text-[#564D4D] text-center mb-8">
+                    {quizData.question}
+                  </div>
+                </motion.div>
 
-        <AnimatePresence>
-          {showSummary && (
-            <motion.div
-              className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-            >
-              <motion.div
-                className="bg-white rounded-lg p-8 max-w-lg w-full text-center"
-                initial={{ scale: 0.8, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ type: "spring", damping: 20 }}
-              >
-                <h2 className="text-2xl font-bold text-gray-800 mb-6">Quiz Report</h2>
-                <div className="text-left max-h-[60vh] overflow-y-auto pr-4">
-                  <h3 className="text-lg font-semibold text-gray-700 mb-4">Recommendations for Improvement</h3>
-                  {recommendations.length > 0 ? (
-                    <ul className="list-disc list-inside text-gray-600 space-y-2">
-                      {recommendations.map((rec, idx) => (
-                        <li key={idx} className="text-left flex items-start">
-                          <span className="text-red-600 mr-2">•</span>
-                          <span>{rec}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="text-gray-600">No recommendations available.</p>
+                {!showResult && !quizCompleted && selectedAnswers.length === 0 && (
+                  <div className="text-center mb-4">
+                    <p className={`text-lg font-semibold ${timer <= 5 ? "text-red-600" : "text-black"}`}>
+                      Time left: {timer} seconds
+                    </p>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+                  {quizData.options.map((option, index) => {
+                    const isSelected = selectedAnswers.includes(index);
+                    const isCorrectAnswer = correctAnswer && correctAnswer.includes(index);
+                    return (
+                      <motion.button
+                        key={`${quizData.question}-${index}`}
+                        onClick={() => handleAnswerSelect(index)}
+                        className={getOptionClassName(index)}
+                        disabled={showResult || quizCompleted}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{
+                          opacity: 1,
+                          y: 0,
+                          ...(showResult && lastAnswerCorrect && isSelected
+                            ? { scale: [1, 1.1, 1], transition: { duration: 0.5, repeat: 4 } }
+                            : showResult && !lastAnswerCorrect && isCorrectAnswer
+                            ? { scale: [1, 1.1, 1], transition: { duration: 0.5, repeat: 4 } }
+                            : showResult && !lastAnswerCorrect && isSelected
+                            ? { x: [-5, 5, -5, 5, 0], transition: { duration: 0.5 } }
+                            : {}),
+                        }}
+                        transition={{ duration: 0.3, delay: 0.1 * index }}
+                        whileHover={!showResult && !quizCompleted ? { scale: 1.02 } : {}}
+                        whileTap={!showResult && !quizCompleted ? { scale: 0.98 } : {}}
+                      >
+                        <div className="flex items-center justify-center gap-2">
+                          <span>{option}</span>
+                        </div>
+                      </motion.button>
+                    );
+                  })}
+                </div>
+
+                {!showResult && !quizCompleted && (
+                  <div className="flex justify-center mb-8">
+                    <motion.button
+                      onClick={handleSubmit}
+                      disabled={selectedAnswers.length === 0}
+                      className="bg-red-600 text-white px-6 py-2 rounded-full hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      Submit Answer
+                    </motion.button>
+                  </div>
+                )}
+
+                <AnimatePresence>
+                  {showResult && !quizCompleted && (
+                    lastAnswerCorrect ? (
+                      <motion.div
+                        className="fixed inset-0 bg-opacity-75 flex items-center justify-center z-50"
+                        style={{ background: "rgba(0, 128, 0, 0.75)" }}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                      >
+                        <svg className="absolute w-full h-full" style={{ pointerEvents: "none" }}>
+                          {[...Array(10)].map((_, i) => (
+                            <motion.line
+                              key={`line-${i}`}
+                              x1={`${Math.random() * 100}%`}
+                              y1={`${Math.random() * 100}%`}
+                              x2={`${Math.random() * 100}%`}
+                              y2={`${Math.random() * 100}%`}
+                              stroke={["#ffffff", "#ffcc00", "#ff6699", "#66ccff"][i % 4]}
+                              strokeWidth="2"
+                              initial={{ pathLength: 0 }}
+                              animate={{ pathLength: 1 }}
+                              transition={{ duration: 1, ease: "easeInOut" }}
+                            />
+                          ))}
+                        </svg>
+                        <motion.div
+                          className="bg-white rounded-lg p-8 max-w-md w-full text-center relative z-10"
+                          initial={{ scale: 0.8, opacity: 0 }}
+                          animate={{ scale: 1, opacity: 1 }}
+                          transition={{ type: "spring", damping: 20 }}
+                        >
+                          <motion.div
+                            className="text-6xl mb-4"
+                            initial={{ y: -100 }}
+                            animate={{ y: 0 }}
+                            transition={{ type: "spring", stiffness: 300, damping: 10 }}
+                          >
+                            🎉
+                          </motion.div>
+                          <h2 className="text-2xl font-bold text-green-600 mb-2">Fantastic Job!</h2>
+                          <p className="text-gray-600 mb-4">You nailed it! Keep up the amazing work!</p>
+                          <p className="text-gray-500 mb-6">
+                            Selected: {lastSubmittedAnswers.map((idx) => quizData.options[idx]).join(", ")}
+                          </p>
+                          <motion.button
+                            onClick={handleNext}
+                            className="bg-green-600 text-white px-6 py-3 rounded-full hover:bg-green-700 transition-colors"
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                          >
+                            Next Question
+                          </motion.button>
+                        </motion.div>
+                      </motion.div>
+                    ) : (
+                      <motion.div
+                        className="fixed bottom-0 left-0 right-0 h-[150px] text-white px-4 py-12 bg-red-600"
+                        initial={{ y: 150, scale: 0.8 }}
+                        animate={{ y: 0, scale: 1 }}
+                        exit={{ y: 150 }}
+                        transition={{ type: "spring", stiffness: 300, damping: 15 }}
+                      >
+                        <div className="max-w-7xl mx-auto flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <motion.div
+                              className="rounded-full p-2"
+                              initial={{ rotate: 0 }}
+                              animate={{ rotate: [0, -10, 10, -10, 0] }}
+                              transition={{ duration: 0.5 }}
+                            >
+                              <svg width="24" height="24" viewBox="0 0 103 94" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M32 32L72 72M72 32L32 72" stroke="#DB0000" strokeWidth="6" strokeLinecap="round" />
+                              </svg>
+                            </motion.div>
+                            <div>
+                              <div className="text-red-400 font-bold">Your answer is incorrect. Don’t give up</div>
+                            </div>
+                          </div>
+                          <motion.button
+                            onClick={handleNext}
+                            className="bg-red-600 text-white px-4 py-2 rounded-full hover:bg-red-700 transition-colors"
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                          >
+                            Start Next Question
+                          </motion.button>
+                        </div>
+                      </motion.div>
+                    )
                   )}
-                </div>
-                <button
-                  onClick={handleCloseSummary}
-                  className="bg-red-600 text-white px-6 py-3 rounded-full hover:bg-red-700 transition-colors w-full font-medium mt-6"
-                >
-                  Close
-                </button>
-              </motion.div>
-            </motion.div>
+                </AnimatePresence>
+
+                <AnimatePresence>
+                  {quizCompleted && (
+                    <motion.div
+                      className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                    >
+                      <motion.div
+                        className="bg-white rounded-lg p-8 max-w-md w-full text-center"
+                        initial={{ scale: 0.8, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        transition={{ type: "spring", damping: 20 }}
+                      >
+                        <div className="mb-4">
+                          <motion.div
+                            className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4"
+                            initial={{ scale: 0 }}
+                            animate={{ scale: [0, 1.2, 1] }}
+                            transition={{ duration: 0.6, delay: 0.2 }}
+                          >
+                            <Check className="h-10 w-10 text-green-500" />
+                          </motion.div>
+                          <motion.h2 className="text-2xl font-bold text-gray-800 mb-2">
+                            {completionReason === "done" ? "Congratulations!" : "Game Over"}
+                          </motion.h2>
+                          <motion.p className="text-gray-600 mb-6">
+                            {completionReason === "done" ? "You’ve completed the quiz successfully!" : "Better luck next time!"}
+                          </motion.p>
+                          <motion.p className="font-medium text-gray-700 mb-6">Level achieved: {level}</motion.p>
+                        </div>
+                        <motion.button
+                          onClick={handleCloseCompletionPopup}
+                          className="bg-red-600 text-white px-6 py-3 rounded-full hover:bg-red-700 transition-colors w-full font-medium"
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                        >
+                          View Report
+                        </motion.button>
+                      </motion.div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                <AnimatePresence>
+                  {showSummary && (
+                    <motion.div
+                      className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                    >
+                      <motion.div
+                        className="bg-white rounded-lg p-8 max-w-lg w-full text-center"
+                        initial={{ scale: 0.8, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        transition={{ type: "spring", damping: 20 }}
+                      >
+                        <h2 className="text-2xl font-bold text-gray-800 mb-6">Quiz Report</h2>
+                        <div className="text-left max-h-[60vh] overflow-y-auto pr-4">
+                          <h3 className="text-lg font-semibold text-gray-700 mb-4">Recommendations for Improvement</h3>
+                          {recommendations.length > 0 ? (
+                            <ul className="list-disc list-inside text-gray-600 space-y-2">
+                              {recommendations.map((rec, idx) => (
+                                <li key={idx} className="text-left flex items-start">
+                                  <span className="text-red-600 mr-2">•</span>
+                                  <span>{rec}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p className="text-gray-600">No recommendations available.</p>
+                          )}
+                        </div>
+                        <button
+                          onClick={handleCloseSummary}
+                          className="bg-red-600 text-white px-6 py-3 rounded-full hover:bg-red-700 transition-colors w-full font-medium mt-6"
+                        >
+                          Close
+                        </button>
+                      </motion.div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </>
           )}
-        </AnimatePresence>
-      </div>
+        </div>
+      )}
     </div>
   );
 }
