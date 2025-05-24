@@ -5,7 +5,7 @@ import axios from "axios";
 import { motion, AnimatePresence } from "framer-motion";
 import confetti from "canvas-confetti";
 
-// Animation variants remain unchanged
+// Animation variants
 const starBurst = {
   initial: { scale: 0, opacity: 1, x: 0, y: 0 },
   animate: (i) => ({
@@ -47,6 +47,7 @@ function MCQQuiz() {
   const navigate = useNavigate();
   const [quizData, setQuizData] = useState(null);
   const [selectedAnswers, setSelectedAnswers] = useState([]);
+  const [lastSubmittedAnswers, setLastSubmittedAnswers] = useState([]);
   const [showResult, setShowResult] = useState(false);
   const [lastAnswerCorrect, setLastAnswerCorrect] = useState(null);
   const [correctAnswer, setCorrectAnswer] = useState(null);
@@ -69,7 +70,7 @@ function MCQQuiz() {
   const completionSoundRef = useRef(null);
   const [soundEnabled, setSoundEnabled] = useState(true);
 
-  // Existing useEffect and function definitions remain unchanged
+  // Fetch initial question
   useEffect(() => {
     const fetchInitialQuestion = async () => {
       try {
@@ -97,6 +98,7 @@ function MCQQuiz() {
     fetchInitialQuestion();
   }, []);
 
+  // Timer logic
   useEffect(() => {
     if (!showResult && quizData && !quizCompleted && selectedAnswers.length === 0) {
       setTimer(30);
@@ -114,6 +116,7 @@ function MCQQuiz() {
     }
   }, [quizData, showResult, quizCompleted]);
 
+  // Sound effects
   useEffect(() => {
     if (showResult && lastAnswerCorrect !== null && soundEnabled) {
       if (lastAnswerCorrect) {
@@ -170,7 +173,6 @@ function MCQQuiz() {
         { headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", "X-Session-ID": sessionId } }
       );
 
-      console.log("token", token);
       const data = response.data;
       const isCorrect = data.correct;
       setLastAnswerCorrect(isCorrect);
@@ -181,6 +183,8 @@ function MCQQuiz() {
           ? null
           : data.correct_answer.split(",").map(Number)
       );
+
+      setLastSubmittedAnswers([...selectedAnswers]);
 
       const newPoints = data.points || 0;
       const gainedPoints = newPoints - previousPoints;
@@ -217,6 +221,7 @@ function MCQQuiz() {
     setShowResult(false);
     setCorrectAnswer(null);
     setLastAnswerCorrect(null);
+    setLastSubmittedAnswers([]);
   };
 
   const handleCloseCompletionPopup = async () => {
@@ -285,9 +290,8 @@ function MCQQuiz() {
       <audio ref={completionSoundRef} src="/sounds/completion.mp3" preload="auto" />
 
       <div className="fixed top-4 right-4 flex gap-2 z-10">
-  
         <button
-          onClick={() => navigate('/home')}
+          onClick={() => handleCloseCompletionPopup()}
           className="p-2 bg-white rounded-full shadow-md hover:bg-gray-100 transition-colors"
           aria-label="Stop Quiz"
           title="Stop Quiz"
@@ -505,64 +509,94 @@ function MCQQuiz() {
 
         <AnimatePresence>
           {showResult && !quizCompleted && (
-            <motion.div
-              className={`fixed bottom-0 left-0 right-0 h-[150px] text-white px-4 py-12 ${
-                lastAnswerCorrect ? "bg-green-600" : "bg-red-600"
-              }`}
-              initial={{ y: 150, scale: 0.8 }}
-              animate={{ y: 0, scale: 1 }}
-              exit={{ y: 150 }}
-              transition={{ type: "spring", stiffness: 300, damping: 15 }}
-            >
-              <div className="max-w-7xl mx-auto flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  {lastAnswerCorrect ? (
-                    <>
-                      <motion.div
-                        className="bg-green-500 rounded-full p-2"
-                        initial={{ scale: 0 }}
-                        animate={{ scale: [0, 1.2, 1] }}
-                        transition={{ duration: 0.5 }}
-                      >
-                        <Check className="h-6 w-6" />
-                      </motion.div>
-                      <div>
-                        <div className="text-green-400 font-bold">Correct :)</div>
-                        <div>
-                          {selectedAnswers.length > 0
-                            ? `Selected: ${selectedAnswers.map((idx) => quizData.options[idx]).join(", ")}`
-                            : "No answers selected"}
-                        </div>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <motion.div
-                        className="rounded-full p-2"
-                        initial={{ rotate: 0 }}
-                        animate={{ rotate: [0, -10, 10, -10, 0] }}
-                        transition={{ duration: 0.5 }}
-                      >
-                        <svg width="24" height="24" viewBox="0 0 103 94" fill="none" xmlns="http://www.w3.org/2000/svg">
-                          <path d="M32 32L72 72M72 32L32 72" stroke="#DB0000" strokeWidth="6" strokeLinecap="round" />
-                        </svg>
-                      </motion.div>
-                      <div>
-                        <div className="text-red-400 font-bold">You are on the way</div>
-                      </div>
-                    </>
-                  )}
-                </div>
-                <motion.button
-                  onClick={handleNext}
-                  className="bg-red-600 text-white px-4 py-2 rounded-full hover:bg-red-700 transition-colors"
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
+            lastAnswerCorrect ? (
+              <motion.div
+                className="fixed inset-0 bg-opacity-75 flex items-center justify-center z-50"
+                style={{ background: "rgba(0, 128, 0, 0.75)" }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+              >
+                <svg className="absolute w-full h-full" style={{ pointerEvents: "none" }}>
+                  {[...Array(10)].map((_, i) => (
+                    <motion.line
+                      key={`line-${i}`}
+                      x1={`${Math.random() * 100}%`}
+                      y1={`${Math.random() * 100}%`}
+                      x2={`${Math.random() * 100}%`}
+                      y2={`${Math.random() * 100}%`}
+                      stroke={["#ffffff", "#ffcc00", "#ff6699", "#66ccff"][i % 4]}
+                      strokeWidth="2"
+                      initial={{ pathLength: 0 }}
+                      animate={{ pathLength: 1 }}
+                      transition={{ duration: 1, ease: "easeInOut" }}
+                    />
+                  ))}
+                </svg>
+                <motion.div
+                  className="bg-white rounded-lg p-8 max-w-md w-full text-center relative z-10"
+                  initial={{ scale: 0.8, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ type: "spring", damping: 20 }}
                 >
-                  Start Next Question
-                </motion.button>
-              </div>
-            </motion.div>
+                  <motion.div
+                    className="text-6xl mb-4"
+                    initial={{ y: -100 }}
+                    animate={{ y: 0 }}
+                    transition={{ type: "spring", stiffness: 300, damping: 10 }}
+                  >
+                    🎉
+                  </motion.div>
+                  <h2 className="text-2xl font-bold text-green-600 mb-2">Fantastic Job!</h2>
+                  <p className="text-gray-600 mb-4">You nailed it! Keep up the amazing work!</p>
+                  <p className="text-gray-500 mb-6">
+                    Selected: {lastSubmittedAnswers.map((idx) => quizData.options[idx]).join(", ")}
+                  </p>
+                  <motion.button
+                    onClick={handleNext}
+                    className="bg-green-600 text-white px-6 py-3 rounded-full hover:bg-green-700 transition-colors"
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                  >
+                    Next Question
+                  </motion.button>
+                </motion.div>
+              </motion.div>
+            ) : (
+              <motion.div
+                className="fixed bottom-0 left-0 right-0 h-[150px] text-white px-4 py-12 bg-red-600"
+                initial={{ y: 150, scale: 0.8 }}
+                animate={{ y: 0, scale: 1 }}
+                exit={{ y: 150 }}
+                transition={{ type: "spring", stiffness: 300, damping: 15 }}
+              >
+                <div className="max-w-7xl mx-auto flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <motion.div
+                      className="rounded-full p-2"
+                      initial={{ rotate: 0 }}
+                      animate={{ rotate: [0, -10, 10, -10, 0] }}
+                      transition={{ duration: 0.5 }}
+                    >
+                      <svg width="24" height="24" viewBox="0 0 103 94" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M32 32L72 72M72 32L32 72" stroke="#DB0000" strokeWidth="6" strokeLinecap="round" />
+                      </svg>
+                    </motion.div>
+                    <div>
+                      <div className="text-red-400 font-bold">Your answer is incorrect. Dont give up</div>
+                    </div>
+                  </div>
+                  <motion.button
+                    onClick={handleNext}
+                    className="bg-red-600 text-white px-4 py-2 rounded-full hover:bg-red-700 transition-colors"
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                  >
+                    Start Next Question
+                  </motion.button>
+                </div>
+              </motion.div>
+            )
           )}
         </AnimatePresence>
 

@@ -92,6 +92,8 @@ const Videos = () => {
   const [recommendedVideos, setRecommendedVideos] = useState([]);
 
   useEffect(() => {
+    const userID = sessionStorage.getItem("userId");
+    console.log("User ID:", userID);
     const fetchVideoData = async () => {
       const token = sessionStorage.getItem("token");
       if (!token) {
@@ -101,7 +103,7 @@ const Videos = () => {
 
       try {
         console.log("Token in videos:", token);
-        const response = await axios.get("/api/v1/video/2", {
+        const response = await axios.get(`/api/v1/video/${userID}`, {
           headers: {
             Authorization: `Bearer ${token}`,
             "Content-Type": "application/json",
